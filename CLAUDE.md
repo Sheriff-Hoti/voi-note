@@ -6,6 +6,16 @@ Android app (Expo React Native) that turns a spoken Recording into a text Note, 
 
 Pinned in `mise.toml` (Java 17, Node 24, Android SDK). The agent shell is not mise-activated: run node, java, gradle and adb through `mise exec --`. To build, install or inspect the app on the phone, use the `device-check` skill.
 
+## Workflow: one ticket, one pull request
+
+The user reviews every change before it reaches `main`. Never commit to `main`, push to it, or merge into it.
+
+- Before starting a ticket (e.g. `/implement #3`): `git switch main && git pull`, then create a branch `ticket/<issue-number>-<short-slug>` (e.g. `ticket/3-model-download`). Commit all work there.
+- Write `Refs #<n>` in commit messages, not `Closes #<n>`. Closing happens when the PR merges.
+- When the ticket is done (tests, lint and the device check pass), push the branch and open a PR with `gh pr create`. Its body starts with `Closes #<n>`, then: what changed, how it was verified (on the phone too), and anything the reviewer should look at closely.
+- Stop after opening the PR. Don't merge it, don't close the issue, and don't start the next ticket. The user merges.
+- Changes outside a ticket (docs, tooling, retro fixes) follow the same rule, on a `chore/<slug>` branch.
+
 ## Agent skills
 
 ### Issue tracker
