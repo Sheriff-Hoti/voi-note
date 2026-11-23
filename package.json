@@ -1,0 +1,63 @@
+{
+  "name": "voi-note",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "test": "jest",
+    "typecheck": "tsc --noEmit",
+    "check:apk": "bash scripts/check-ort-symbol.sh android/app/build/outputs/apk",
+    "postinstall": "bash scripts/use-sherpa-2.0.3.sh"
+  },
+  "dependencies": {
+    "@rn-primitives/portal": "^1.5.3",
+    "@rn-primitives/slot": "^1.5.2",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "expo": "~58.0.26",
+    "expo-constants": "~58.0.16",
+    "expo-dev-client": "~58.0.21",
+    "expo-linking": "~58.0.17",
+    "expo-router": "~58.0.32",
+    "expo-splash-screen": "~58.0.14",
+    "expo-status-bar": "~58.0.5",
+    "expo-system-ui": "~58.0.7",
+    "nativewind": "^4.2.7",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-reanimated": "4.7.1",
+    "react-native-safe-area-context": "~5.11.1",
+    "react-native-screens": "~4.30.1",
+    "react-native-sherpa-onnx": "0.4.4",
+    "react-native-worklets": "0.13.0",
+    "tailwind-merge": "^3.7.1",
+    "tailwindcss": "^3.4.17",
+    "tailwindcss-animate": "^1.0.7"
+  },
+  "devDependencies": {
+    "@testing-library/react-native": "^14.1.0",
+    "@types/jest": "^30.0.0",
+    "@types/react": "~19.3.0",
+    "babel-preset-expo": "^58.0.26",
+    "jest": "^30.5.2",
+    "jest-expo": "^58.0.15",
+    "typescript": "~6.0.3"
+  },
+  "jest": {
+    "preset": "jest-expo",
+    "transformIgnorePatterns": [
+      "/node_modules/(?!(.pnpm|react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|standard-navigation|@rn-primitives|nativewind|react-native-css-interop))",
+      "/node_modules/react-native-reanimated/plugin/",
+      "/node_modules/@react-native/babel-preset/"
+    ],
+    "moduleNameMapper": {
+      "\\.css$": "<rootDir>/test/style-stub.js"
+    },
+    "setupFiles": [
+      "<rootDir>/test/setup.ts"
+    ]
+  }
+}

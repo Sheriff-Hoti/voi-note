@@ -17,7 +17,7 @@ Gathered during grilling from primary sources. Verify versions before relying on
 - react-native-executorch — Whisper/Moonshine only, needs Expo SDK 55+ dev build.
 
 ## Device
-Target: Samsung Galaxy A55 (Exynos 1480, 8 GB). No Snapdragon NPU paths; expect CPU inference. No published mid-range benchmarks — the prototype must measure cold load, real-time factor, heat.
+Target: Samsung Galaxy A54 (Exynos 1380, 8 GB). No Snapdragon NPU paths; expect CPU inference. No published mid-range benchmarks — the prototype must measure cold load, real-time factor, heat.
 
 ## Storage
 16 kHz mono: WAV ~1.9 MB/min; AAC/Opus 24–32 kbps ~0.2 MB/min.

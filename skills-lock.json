@@ -1,0 +1,53 @@
+{
+  "version": 2,
+  "skills": {
+    "expo-dev-client": {
+      "source": "expo/skills",
+      "commit": "88d9bd79f3fa8452a778fbac65bae162c0b32ce4",
+      "sourceType": "github",
+      "skillPath": "plugins/expo/skills/expo-dev-client/SKILL.md",
+      "computedHash": "d57782a2f5e92847b5bde90900c25f06ffa201e93da81e58e576c046077eb944",
+      "installMode": "copy"
+    },
+    "expo-module": {
+      "source": "expo/skills",
+      "commit": "88d9bd79f3fa8452a778fbac65bae162c0b32ce4",
+      "sourceType": "github",
+      "skillPath": "plugins/expo/skills/expo-module/SKILL.md",
+      "computedHash": "0b34d929db086777de7134db7fa7c7264e86152ec203feb255ae0bab82d01e69",
+      "installMode": "copy"
+    },
+    "expo-project-structure": {
+      "source": "expo/skills",
+      "commit": "88d9bd79f3fa8452a778fbac65bae162c0b32ce4",
+      "sourceType": "github",
+      "skillPath": "plugins/expo/skills/expo-project-structure/SKILL.md",
+      "computedHash": "1d8d0089c3f367cda801f2b675d8df6b773806b62ffb8d88b390bed9f10fa607",
+      "installMode": "copy"
+    },
+    "expo-router": {
+      "source": "expo/skills",
+      "commit": "88d9bd79f3fa8452a778fbac65bae162c0b32ce4",
+      "sourceType": "github",
+      "skillPath": "plugins/expo/skills/expo-router/SKILL.md",
+      "computedHash": "9c3a05a145ceec25ccca5c733b9403b03c7174c60c48c017009c2c5a1a68c8cb",
+      "installMode": "copy"
+    },
+    "react-native-reusables": {
+      "source": "hairyf/skills",
+      "commit": "ffa1f904012f48f5bdf34ebb692daa09c778d47f",
+      "sourceType": "github",
+      "skillPath": "skills/react-native-reusables/SKILL.md",
+      "computedHash": "af891158a87ccf8288ff8eba23cce09996e56d56ce69170ed17d8d4e95a62a54",
+      "installMode": "copy"
+    },
+    "styling-nativewind-v4-expo": {
+      "source": "tristanmanchester/agent-skills",
+      "commit": "2b11ad44d295d6af3687c6b062474a50493fe41e",
+      "sourceType": "github",
+      "skillPath": "styling-nativewind-v4-expo/SKILL.md",
+      "computedHash": "bd2f848f139315fc467020a024b47095f57915262c6e1471af12078ddf6a2678",
+      "installMode": "copy"
+    }
+  }
+}

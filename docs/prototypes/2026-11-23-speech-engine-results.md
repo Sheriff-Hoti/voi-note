@@ -5,7 +5,7 @@ Next: `/to-spec`, then `/to-tickets`, then `/implement` or `/implement-spec`.
 
 ## Verdicts
 
-1. **Engine:** Parakeet Unified EN 0.6B runs on the Galaxy A55 from Expo RN through **react-native-sherpa-onnx 0.4.4**,
+1. **Engine:** Parakeet Unified EN 0.6B runs on the Galaxy A54 from Expo RN through **react-native-sherpa-onnx 0.4.4**,
    with no hand-written Kotlin, **but only after swapping two native parts at install time**:
    sherpa-onnx → **2.0.3** (k2-fsa AAR) and ONNX Runtime → **k2-fsa's 1.28.2** (from the same AAR).
    With the library's own ORT (1.25) the app aborts at startup: `dlopen failed: cannot locate symbol OrtGetApiBase`
@@ -14,7 +14,7 @@ Next: `/to-spec`, then `/to-tickets`, then `/implement` or `/implement-spec`.
 2. **Mode:** **after-Stop wins; Live is dropped.** v1 ships after-Stop with the **offline (non-streaming)** export,
    decoded **in chunks during the Recording** (cut at pauses), so Stop only waits for the last chunk.
 
-## Measurements (A55, 4 threads, EAS release build)
+## Measurements (A54, 4 threads, EAS release build)
 
 | | Result | Target |
 |---|---|---|
@@ -23,7 +23,7 @@ Next: `/to-spec`, then `/to-tickets`, then `/implement` or `/implement-spec`.
 | Transcript ready after Stop, whole Recording at once | 6.2–9.9 s for 49–63 s (RTF 0.13–0.16) | < 5 s ❌ |
 | Transcript ready after Stop, **chunked** | **2–3 ms** (trailing pause); worst case ≈ max chunk × 0.12 | < 5 s ✅ |
 | Chunked decode speed / max background lag | RTF 0.11–0.12 / 0.8–2.9 s | — |
-| Live (560 ms streaming export) | RTF 2.7–3.9 on A55; lag 12–30 s | lag < 1.5 s ❌ |
+| Live (560 ms streaming export) | RTF 2.7–3.9 on A54; lag 12–30 s | lag < 1.5 s ❌ |
 | Heat | not warm after ~1 min runs | 5-min run not done |
 | APK | 59 MB arm64-only (125 MB with x86_64) | — |
 
@@ -55,7 +55,7 @@ artefacts: "this time I. Will not stop", "the Previous port".
   `-keep class com.k2fsa.sherpa.onnx.** { *; }` (sherpa's JNI reads those fields by name; the library ships no rule).
 - **Model files:** the in-app download writes into the app's own external files dir, which works. Files placed there with
   `adb push` are owned by `shell` and the app can't read them (scoped storage); only matters for dev/testing.
-- **Threads:** 4 (A55: 4× A78 + 4× A55). 2/6 not compared.
+- **Threads:** 4 (A54: 4× Cortex-A78 + 4× Cortex-A55). 2/6 not compared.
 
 ## v1 decisions from the earlier grilling (still unrecorded elsewhere — copied unchanged)
 
