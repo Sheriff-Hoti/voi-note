@@ -1,6 +1,6 @@
 # voi-note
 
-Android voice-notes app (React Native + Expo): speak, transcribe on-device, save as a text note.
+Android app (Expo React Native) that turns a spoken Recording into a text Note, transcribed on the phone.
 
 ## Toolchain
 
