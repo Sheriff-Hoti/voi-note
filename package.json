@@ -9,7 +9,11 @@
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "check:apk": "bash scripts/check-ort-symbol.sh android/app/build/outputs/apk",
-    "postinstall": "bash scripts/use-sherpa-2.0.3.sh"
+    "postinstall": "bash scripts/use-sherpa-2.0.3.sh",
+    "lint": "eslint . --max-warnings=0",
+    "check:pin": "node -e \"const v=require('./package.json').dependencies['react-native-sherpa-onnx'];if(v!=='0.4.4'){console.error('react-native-sherpa-onnx must stay pinned at exactly 0.4.4 (ADR 0002), found '+v);process.exit(1)}\"",
+    "check": "npm run check:pin && npm run lint && npm run typecheck && npm test",
+    "prepare": "husky"
   },
   "dependencies": {
     "@rn-primitives/portal": "^1.5.3",
@@ -42,8 +46,14 @@
     "@types/jest": "^30.0.0",
     "@types/react": "~19.3.0",
     "babel-preset-expo": "^58.0.26",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "^58.0.4",
+    "husky": "^9.1.7",
     "jest": "^30.5.2",
     "jest-expo": "^58.0.15",
+    "lint-staged": "^17.6.2",
+    "prettier": "^3.10.1",
+    "prettier-plugin-tailwindcss": "^0.6.14",
     "typescript": "~6.0.3"
   },
   "jest": {

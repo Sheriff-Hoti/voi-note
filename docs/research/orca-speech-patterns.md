@@ -3,6 +3,7 @@
 Read from the installed Orca desktop app (minified). Orca now runs transcribe.cpp/GGUF; the patterns are engine-agnostic.
 
 ## Download
+
 - Catalog entry: id, label, language, files [{name, url, sizeBytes, sha256}], sizeBytes, sampleRate 16000, streaming, replacedBy (retirement → "needs update").
 - URLs pinned to a Hugging Face commit.
 - Download into `<modelDir>.partial/`; resume with `Range`, accept 206 only if Content-Range start matches; on bad 206/416 delete and retry.
@@ -14,6 +15,7 @@ Read from the installed Orca desktop app (minified). Orca now runs transcribe.cp
 - Orca gaps to improve on: no disk-space check; .partial deleted on restart (no resume across app kill).
 
 ## Initialization
+
 - Prewarm on startup and on focus; failed prewarm remembered per model (no retry loop).
 - Engine isolated in its own process; 60 s load timeout.
 - Warm-up: decode silence once (1.5 s streaming, 0.5 s offline).
@@ -22,6 +24,7 @@ Read from the installed Orca desktop app (minified). Orca now runs transcribe.cp
 - GPU failure → respawn on CPU and replay buffered audio; failure remembered per OS/lib version.
 
 ## Audio / latency
+
 - Start mic first, buffer PCM in a capped ring (60 s / 8 MiB), flush to engine when ready. Keep raw audio (up to 600 s) so a failed engine can retry without re-recording.
 - 16 kHz mono, 100 ms frames; echo cancellation / noise suppression / AGC on.
 - Streaming: emit partial only on change; commit text unchanged for 2 s; restart stream at 25 s (or 20 s at a ≥0.15 s pause) to bound state.

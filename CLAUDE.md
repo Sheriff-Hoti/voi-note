@@ -2,6 +2,10 @@
 
 Android voice-notes app (React Native + Expo): speak, transcribe on-device, save as a text note.
 
+## Toolchain
+
+Pinned in `mise.toml` (Java 17, Node 24, Android SDK). The agent shell is not mise-activated: run node, java, gradle and adb through `mise exec --`. To build, install or inspect the app on the phone, use the `device-check` skill.
+
 ## Agent skills
 
 ### Issue tracker

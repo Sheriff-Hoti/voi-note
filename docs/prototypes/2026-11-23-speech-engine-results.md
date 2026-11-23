@@ -16,16 +16,16 @@ Next: `/to-spec`, then `/to-tickets`, then `/implement` or `/implement-spec`.
 
 ## Measurements (A54, 4 threads, EAS release build)
 
-| | Result | Target |
-|---|---|---|
-| Recording starts (first mic audio after JS start) | 0.31–0.50 s | < 1 s ✅ |
-| Offline model ready (load + warm-up on 0.5 s silence) | 5.1–6.2 s + 0.18 s = **5.3–6.4 s** | < 5 s ❌ (audio is buffered meanwhile; nothing lost) |
-| Transcript ready after Stop, whole Recording at once | 6.2–9.9 s for 49–63 s (RTF 0.13–0.16) | < 5 s ❌ |
-| Transcript ready after Stop, **chunked** | **2–3 ms** (trailing pause); worst case ≈ max chunk × 0.12 | < 5 s ✅ |
-| Chunked decode speed / max background lag | RTF 0.11–0.12 / 0.8–2.9 s | — |
-| Live (560 ms streaming export) | RTF 2.7–3.9 on A54; lag 12–30 s | lag < 1.5 s ❌ |
-| Heat | not warm after ~1 min runs | 5-min run not done |
-| APK | 59 MB arm64-only (125 MB with x86_64) | — |
+|                                                       | Result                                                     | Target                                               |
+| ----------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------- |
+| Recording starts (first mic audio after JS start)     | 0.31–0.50 s                                                | < 1 s ✅                                             |
+| Offline model ready (load + warm-up on 0.5 s silence) | 5.1–6.2 s + 0.18 s = **5.3–6.4 s**                         | < 5 s ❌ (audio is buffered meanwhile; nothing lost) |
+| Transcript ready after Stop, whole Recording at once  | 6.2–9.9 s for 49–63 s (RTF 0.13–0.16)                      | < 5 s ❌                                             |
+| Transcript ready after Stop, **chunked**              | **2–3 ms** (trailing pause); worst case ≈ max chunk × 0.12 | < 5 s ✅                                             |
+| Chunked decode speed / max background lag             | RTF 0.11–0.12 / 0.8–2.9 s                                  | —                                                    |
+| Live (560 ms streaming export)                        | RTF 2.7–3.9 on A54; lag 12–30 s                            | lag < 1.5 s ❌                                       |
+| Heat                                                  | not warm after ~1 min runs                                 | 5-min run not done                                   |
+| APK                                                   | 59 MB arm64-only (125 MB with x86_64)                      | —                                                    |
 
 Cross-check on the PC (i5-9400F, sherpa-onnx 2.0.3 Python, 4 threads): streaming RTF 2.3–3.2, offline RTF 0.08–0.11,
 same text. So Live's cost is the streaming path itself (~30× the offline cost), not the phone.
