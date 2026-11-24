@@ -16,7 +16,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.voinote.app"
+      "package": "com.voinote.app",
+      "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "plugins": [
       "expo-router",
