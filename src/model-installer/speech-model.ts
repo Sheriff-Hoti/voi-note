@@ -1,4 +1,4 @@
-import type { SpeechModelFiles } from './installer';
+import { totalBytes, type SpeechModelFiles } from './installer';
 
 const REPO = 'csukuangfj2/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming';
 const REVISION = '8c3a10fb13408c7a7054f6898958bf1c64a8d6c7';
@@ -40,7 +40,4 @@ export const PARAKEET_UNIFIED_EN = {
   ],
 } as const satisfies SpeechModelFiles & { id: string; label: string };
 
-export const PARAKEET_UNIFIED_EN_BYTES = PARAKEET_UNIFIED_EN.files.reduce(
-  (sum, f) => sum + f.size,
-  0
-);
+export const PARAKEET_UNIFIED_EN_BYTES = totalBytes(PARAKEET_UNIFIED_EN);

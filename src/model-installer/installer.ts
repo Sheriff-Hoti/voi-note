@@ -13,12 +13,15 @@ export type DownloadProgress = {
 };
 
 /** A downloaded file did not match its pinned size or SHA-256. It was deleted, not installed. */
-export class ChecksumMismatchError extends Error {
-  constructor(readonly fileName: string) {
+export class ModelVerificationError extends Error {
+  constructor(fileName: string) {
     super(`${fileName} does not match its pinned size and SHA-256`);
-    this.name = 'ChecksumMismatchError';
+    this.name = 'ModelVerificationError';
   }
 }
+
+export const totalBytes = (model: SpeechModelFiles) =>
+  model.files.reduce((sum, file) => sum + file.size, 0);
 
 export interface ModelInstaller {
   /** "installed" when every file is present at its exact pinned size. Does not rehash. */
@@ -26,7 +29,7 @@ export interface ModelInstaller {
   /**
    * Downloads each file to `<name>.partial`, verifies it, then moves it into place, so a file under
    * its final name is always a verified one. Resolves once the Speech Model is installed; rejects with
-   * ChecksumMismatchError when a file fails verification.
+   * ModelVerificationError when a file fails verification.
    */
   download(onProgress?: (progress: DownloadProgress) => void): Promise<void>;
 }
@@ -40,7 +43,7 @@ export function createModelInstaller(deps: {
 }): ModelInstaller {
   const { model, dir, http, fs } = deps;
   const pathOf = (file: ModelFile) => `${dir}/${file.name}`;
-  const bytesTotal = model.files.reduce((sum, f) => sum + f.size, 0);
+  const bytesTotal = totalBytes(model);
 
   return {
     async status() {
@@ -65,7 +68,7 @@ export function createModelInstaller(deps: {
           (await fs.size(partial)) === file.size && (await fs.sha256(partial)) === file.sha256;
         if (!verified) {
           await fs.remove(partial);
-          throw new ChecksumMismatchError(file.name);
+          throw new ModelVerificationError(file.name);
         }
         await fs.move(partial, path);
       }

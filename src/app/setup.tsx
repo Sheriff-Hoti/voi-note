@@ -7,7 +7,11 @@ import { Progress } from '@/components/ui/progress';
 import { Text } from '@/components/ui/text';
 import { checkMicPermission, requestMicPermission, type MicPermission } from '@/lib/mic-permission';
 import { downloadSpeechModel, useSpeechModel } from '@/lib/speech-model-store';
-import { PARAKEET_UNIFIED_EN, PARAKEET_UNIFIED_EN_BYTES } from '@/model-installer';
+import {
+  PARAKEET_UNIFIED_EN,
+  PARAKEET_UNIFIED_EN_BYTES,
+  type DownloadProgress,
+} from '@/model-installer';
 
 const mb = (bytes: number) => Math.round(bytes / 1e6).toLocaleString('en-US');
 
@@ -87,11 +91,7 @@ function SpeechModelRow() {
   );
 }
 
-function DownloadProgressView({
-  progress,
-}: {
-  progress: { phase: 'downloading' | 'verifying'; bytesDone: number; bytesTotal: number } | null;
-}) {
+function DownloadProgressView({ progress }: { progress: DownloadProgress | null }) {
   const done = progress?.bytesDone ?? 0;
   const total = progress?.bytesTotal ?? PARAKEET_UNIFIED_EN_BYTES;
   const percent = Math.floor((done / total) * 100);

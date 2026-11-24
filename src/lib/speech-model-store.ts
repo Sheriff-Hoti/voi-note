@@ -25,7 +25,11 @@ function subscribe(listener: () => void) {
     checked = true;
     speechModelInstaller.status().then(
       (status) => set({ kind: status }),
-      (error) => set({ kind: 'not-installed', error: String(error) })
+      (error) => {
+        // Not a failed download: offer a plain Download, and keep the cause in the logs.
+        console.error('[speech-model] status check failed', error);
+        set({ kind: 'not-installed' });
+      }
     );
   }
   return () => listeners.delete(listener);

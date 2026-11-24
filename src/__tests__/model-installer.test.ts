@@ -1,5 +1,5 @@
 import {
-  ChecksumMismatchError,
+  ModelVerificationError,
   createModelInstaller,
   type DownloadProgress,
 } from '@/model-installer/installer';
@@ -49,7 +49,7 @@ describe('model installer', () => {
     const { http, installer } = setup();
     http.serve('https://models.test/tokens.txt', 'w0rld'); // right size, wrong bytes
 
-    await expect(installer.download()).rejects.toBeInstanceOf(ChecksumMismatchError);
+    await expect(installer.download()).rejects.toBeInstanceOf(ModelVerificationError);
 
     expect(await installer.status()).toBe('not-installed');
   });

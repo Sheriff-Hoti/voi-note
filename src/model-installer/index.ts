@@ -4,7 +4,7 @@ import { createModelInstaller } from './installer';
 import { rnfsFileSystem, rnfsHttp } from './rnfs-adapters';
 import { PARAKEET_UNIFIED_EN } from './speech-model';
 
-export * from './installer';
+export type { DownloadProgress, ModelStatus } from './installer';
 export { PARAKEET_UNIFIED_EN, PARAKEET_UNIFIED_EN_BYTES } from './speech-model';
 
 /** Where the Speech Model's files live: the app's own internal storage. */
