@@ -32,7 +32,7 @@ Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-f
 
 ### Prototype evidence
 
-Before a ticket that touches speech or chunking, read `docs/prototypes/`: the Speech Model's observed output and the A54 measurements that ticket decisions rest on.
+Before a ticket that touches speech, chunking, or timing in the background, read `docs/prototypes/` and `docs/adr/0004-release-speech-model-on-background.md`: the A54 behaviour and measurements that ticket decisions rest on.
 
 ### Domain docs
 

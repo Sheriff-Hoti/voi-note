@@ -18,3 +18,4 @@ Applied in review (`/code-review`). Linting, formatting and types are enforced b
 ## Decisions
 
 - A change that goes against an ADR in `docs/adr/` says so in the PR, or comes with a new ADR.
+- A change that departs from spec #1 (or an ADR that overrides one of its lines) updates that spec line in the same PR, with `gh issue edit 1`, and the PR says so.
