@@ -49,4 +49,12 @@ export function useNote(id: string): Note | null | undefined {
 }
 
 export const startRecording = () => voiceNotes.startRecording();
-export const stopRecording = () => voiceNotes.stop();
+/** Logs how long Stop took, the wait the user sees (target: 1.5 s or less). Read by the device check. */
+export async function stopRecording() {
+  const stoppedAt = Date.now();
+  try {
+    return await voiceNotes.stop();
+  } finally {
+    console.log(`[voice-notes] Stop took ${Date.now() - stoppedAt} ms`);
+  }
+}

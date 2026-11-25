@@ -30,6 +30,10 @@ Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-f
 
 `CODING_STANDARDS.md`: the judgement calls `/code-review` checks (tests, language, ADRs).
 
+### Prototype evidence
+
+Before a ticket that touches speech or chunking, read `docs/prototypes/`: the Speech Model's observed output and the A54 measurements that ticket decisions rest on.
+
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
