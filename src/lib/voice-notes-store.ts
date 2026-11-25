@@ -93,6 +93,9 @@ export function followAppState(): void {
 export const startRecording = () => voiceNotes.startRecording();
 export const discardRecording = () => voiceNotes.discard();
 export const undoDiscard = () => voiceNotes.undoDiscard();
+export const editNote = (id: string, text: string) => voiceNotes.editNote(id, text);
+export const deleteNote = (id: string) => voiceNotes.deleteNote(id);
+export const shareText = (id: string) => voiceNotes.shareText(id);
 /** Logs how long Stop took, the wait the user sees (target: 1.5 s or less). Read by the device check. */
 export async function stopRecording() {
   const stoppedAt = Date.now();

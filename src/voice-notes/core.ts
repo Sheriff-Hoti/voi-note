@@ -80,6 +80,15 @@ export interface VoiceNotes {
   /** Every Note, newest first. */
   listNotes(): Promise<Note[]>;
   getNote(id: string): Promise<Note | null>;
+  /**
+   * Replaces the Note's text with `text`; the Transcript is not kept. Edits are saved in the order they
+   * are made. Rejects when there is no such Note.
+   */
+  editNote(id: string, text: string): Promise<void>;
+  /** Deletes the Note and its audio. Rejects when there is no such Note. */
+  deleteNote(id: string): Promise<void>;
+  /** The Note's text to share, with every edit made so far saved. Rejects when there is no such Note. */
+  shareText(id: string): Promise<string>;
 }
 
 export function createVoiceNotes(deps: {
@@ -105,6 +114,8 @@ export function createVoiceNotes(deps: {
   let inBackground = false;
   /** The Speech Model was released in the background: load it again when the app comes back. */
   let reloadWhenActive = false;
+  /** Settles once the last edit or delete is saved: each waits for the one before, so the last wins. */
+  let noteWrites: Promise<unknown> = Promise.resolve();
 
   function setState(next: CaptureState) {
     state = next;
@@ -205,6 +216,16 @@ export function createVoiceNotes(deps: {
     await notes.insert(note);
     notesListeners.forEach((l) => l());
     return note;
+  }
+
+  /** Runs `write` after the edits and deletes before it, then tells the listeners. */
+  function writeNote<T>(write: () => Promise<T>): Promise<T> {
+    const done = noteWrites.then(write);
+    noteWrites = done.catch(() => {});
+    return done.then((result) => {
+      notesListeners.forEach((l) => l());
+      return result;
+    });
   }
 
   /** Shows `finishing` while `save` runs (Stop, the cap or Undo), then idle. */
@@ -362,6 +383,24 @@ export function createVoiceNotes(deps: {
 
     listNotes: () => notes.list(),
     getNote: (id) => notes.get(id),
+    editNote: (id, text) =>
+      writeNote(async () => {
+        if (!(await notes.updateText(id, text))) throw new Error(`No Note ${id}`);
+      }),
+    deleteNote: (id) =>
+      writeNote(async () => {
+        const note = await notes.get(id);
+        if (!note) throw new Error(`No Note ${id}`);
+        // The audio first: if deleting it fails, the Note stays and can be deleted again.
+        if (note.audioPath) await files.remove(note.audioPath);
+        await notes.remove(id);
+      }),
+    async shareText(id) {
+      await noteWrites;
+      const note = await notes.get(id);
+      if (!note) throw new Error(`No Note ${id}`);
+      return note.text;
+    },
   };
   return voiceNotes;
 }

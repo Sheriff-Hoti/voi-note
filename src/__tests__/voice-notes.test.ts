@@ -605,4 +605,65 @@ describe('voice-notes core', () => {
       expect(core.getState()).toEqual({ kind: 'idle' });
     });
   });
+  describe('editing, deleting and sharing a Note', () => {
+    /** A new core on the same database and files, as after an app restart. */
+    const relaunch = (s: ReturnType<typeof setup>) =>
+      createVoiceNotes({
+        audio: new FakeAudioSource(),
+        engine: new FakeSpeechEngine(),
+        files: s.files,
+        sql: s.sql,
+        clock: s.clock,
+      });
+
+    it('an edit replaces the text, and is kept across an app restart', async () => {
+      const s = setup();
+      const note = (await record(s, 'Buy milk.', Date.UTC(2026, 10, 25, 9, 0)))!;
+      let changes = 0;
+      s.core.onNotesChanged(() => changes++);
+
+      await s.core.editNote(note.id, 'Buy oat milk and bread.');
+
+      expect(changes).toBe(1);
+      expect(await relaunch(s).getNote(note.id)).toEqual({
+        ...note,
+        text: 'Buy oat milk and bread.',
+      });
+    });
+
+    it('delete removes the Note and its audio, and only that Note', async () => {
+      const s = setup();
+      const kept = (await record(s, 'Keep this.', Date.UTC(2026, 10, 25, 9, 0)))!;
+      const note = (await record(s, 'Delete this.', Date.UTC(2026, 10, 25, 10, 0)))!;
+      let changes = 0;
+      s.core.onNotesChanged(() => changes++);
+
+      await s.core.deleteNote(note.id);
+
+      expect(changes).toBe(1);
+      expect(await relaunch(s).listNotes()).toEqual([kept]);
+      expect([...s.files.files.keys()]).toEqual([kept.audioPath]);
+    });
+
+    it("shareText gives the Note's text as edited", async () => {
+      const s = setup();
+      const note = (await record(s, 'Call the bank.', Date.UTC(2026, 10, 25, 9, 0)))!;
+      expect(await s.core.shareText(note.id)).toBe('Call the bank.');
+
+      await s.core.editNote(note.id, 'Call the bank about the card.');
+
+      expect(await s.core.shareText(note.id)).toBe('Call the bank about the card.');
+    });
+
+    it('edit, delete and shareText reject a Note that is not there', async () => {
+      const s = setup();
+      const note = (await record(s, 'Gone soon.', Date.UTC(2026, 10, 25, 9, 0)))!;
+      await s.core.deleteNote(note.id);
+
+      await expect(s.core.editNote(note.id, 'Too late.')).rejects.toThrow();
+      await expect(s.core.deleteNote(note.id)).rejects.toThrow();
+      await expect(s.core.shareText(note.id)).rejects.toThrow();
+      expect(await s.core.listNotes()).toEqual([]);
+    });
+  });
 });

@@ -36,6 +36,9 @@ export interface NotesRepository {
   get(id: string): Promise<Note | null>;
   /** Newest first. */
   list(): Promise<Note[]>;
+  /** Replaces the Note's text. Resolves false when there is no Note with this id. */
+  updateText(id: string, text: string): Promise<boolean>;
+  remove(id: string): Promise<void>;
 }
 
 /** The Notes, stored in SQLite through `sql`. Brings the schema up to date before the first query. */
@@ -59,6 +62,18 @@ export function createNotesRepository(sql: SqlExecutor): NotesRepository {
     async list() {
       await ready();
       return (await sql.execute('SELECT * FROM notes ORDER BY created_at DESC')).map(noteOf);
+    },
+    async updateText(id, text) {
+      await ready();
+      const updated = await sql.execute('UPDATE notes SET text = ? WHERE id = ? RETURNING id', [
+        text,
+        id,
+      ]);
+      return updated.length > 0;
+    },
+    async remove(id) {
+      await ready();
+      await sql.execute('DELETE FROM notes WHERE id = ?', [id]);
     },
   };
 }
