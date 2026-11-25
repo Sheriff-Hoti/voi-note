@@ -2,6 +2,31 @@
 jest.mock('react-native-sherpa-onnx', () => ({
   testSherpaInit: jest.fn(() => Promise.resolve('mock')),
 }));
+jest.mock('react-native-sherpa-onnx/audio', () => ({
+  createPcmLiveStream: jest.fn(() => ({
+    start: jest.fn(() => Promise.resolve()),
+    stop: jest.fn(() => Promise.resolve()),
+    onData: jest.fn(() => () => {}),
+    onError: jest.fn(() => () => {}),
+  })),
+}));
+jest.mock('react-native-sherpa-onnx/stt', () => ({
+  createSTT: jest.fn(() => Promise.reject(new Error('no Speech Model under Jest'))),
+}));
+
+// expo-sqlite on Node's built-in SQLite, in memory: the screens get real (empty) storage.
+jest.mock('expo-sqlite', () => {
+  const { DatabaseSync } = jest.requireActual<typeof import('node:sqlite')>('node:sqlite');
+  return {
+    openDatabaseAsync: jest.fn(async () => {
+      const db = new DatabaseSync(':memory:');
+      return {
+        getAllAsync: async (sql: string, params: (string | number | null)[] = []) =>
+          db.prepare(sql).all(...params),
+      };
+    }),
+  };
+});
 
 // Nor does react-native-fs: an empty file system, so the Speech Model is not installed.
 jest.mock('@dr.pogodin/react-native-fs', () => ({
