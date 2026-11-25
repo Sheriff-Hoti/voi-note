@@ -9,7 +9,7 @@ Applied in review (`/code-review`). Linting, formatting and types are enforced b
 - **Expected values come from an independent source:** a literal, a worked example, or the spec. Not a recomputation of what the code does.
 - **Fakes live next to their ports** (for example `src/model-installer/fakes.ts`) and stay scriptable, so a test states the scenario (`offline`, `stallAfter`, a bad `Content-Range`) instead of building it.
 - **A bug found on the phone gets a fake that reproduces it.** The fix adds a scriptable option to the fake for the device behaviour (for example the microphone delivering frames while it stops), plus a seam test that fails without the fix. A fake that is tidier than the device hides the bug from every later test.
-- **Time-based behaviour** (backoff, timeouts, the Undo window, the 5-minute cap) runs on Jest's fake timers, never real waits.
+- **Time-based behaviour** (backoff, timeouts, the Undo window) runs on Jest's fake timers, never real waits. The core calls the global timers; this overrides spec #1's "Clock/Timers" port. The 5-minute cap counts audio, not time, so its tests send frames.
 
 ## Language
 
@@ -18,4 +18,5 @@ Applied in review (`/code-review`). Linting, formatting and types are enforced b
 ## Decisions
 
 - A change that goes against an ADR in `docs/adr/` says so in the PR, or comes with a new ADR.
+- **A timer in the voice-notes core says what happens when the app goes to the background before it fires**, since React Native's timers don't run there (ADR 0004). A seam test drives that path with `appStateChanged('background')` (for example, a Discard's Undo window ends there).
 - A change that departs from spec #1 (or an ADR that overrides one of its lines) updates that spec line in the same PR, with `gh issue edit 1`, and the PR says so.

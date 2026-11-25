@@ -73,11 +73,24 @@ export class FakeSpeechEngine implements SpeechEngine {
   readonly received: Float32Array[] = [];
   private readonly transcripts: string[] = [];
   private loadGate: Promise<void> | null = null;
+  private transcribeGate: Promise<void> | null = null;
+  private decoding = false;
 
   /** Makes load() wait, as the real Speech Model takes seconds to load. Call the result to let it finish. */
   holdLoad(): () => void {
     let release!: () => void;
     this.loadGate = new Promise((resolve) => (release = resolve));
+    return release;
+  }
+
+  /**
+   * Makes transcribe() wait, as a real decode takes up to about 1.5 s. Call the result to let it finish.
+   * Meanwhile the fake is as strict as the native recognizer: a second transcribe() fails, and a
+   * release() makes the held decode fail.
+   */
+  holdTranscribe(): () => void {
+    let release!: () => void;
+    this.transcribeGate = new Promise((resolve) => (release = resolve));
     return release;
   }
 
@@ -98,8 +111,16 @@ export class FakeSpeechEngine implements SpeechEngine {
 
   async transcribe(samples: Float32Array) {
     if (!this.loaded) throw new Error('transcribe before load');
-    this.received.push(samples);
-    return this.transcripts.shift() ?? '';
+    if (this.decoding) throw new Error('two decodes at once on one Speech Model');
+    this.decoding = true;
+    try {
+      await this.transcribeGate;
+      if (!this.loaded) throw new Error('the Speech Model was released during a decode');
+      this.received.push(samples);
+      return this.transcripts.shift() ?? '';
+    } finally {
+      this.decoding = false;
+    }
   }
 
   async release() {

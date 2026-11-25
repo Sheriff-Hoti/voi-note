@@ -544,6 +544,45 @@ describe('voice-notes core', () => {
     });
   });
 
+  describe('one decode at a time', () => {
+    it('keeps the Speech Model while a Note is saved in the background, and releases it after', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Saved in the background.');
+      await core.startRecording();
+      audio.speak(10);
+      const decoded = engine.holdTranscribe();
+
+      const stopped = core.stop();
+      await settle(); // the last decode is running
+      core.appStateChanged('background');
+      decoded();
+
+      expect((await stopped)?.text).toBe('Saved in the background.');
+      await settle();
+      expect(engine.loaded).toBe(false);
+    });
+
+    it('decodes a new Recording after the Discarded one has finished its decode', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Thrown away.', 'The real one.');
+      await core.startRecording();
+      await settle(); // the Speech Model is loaded
+      const decoded = engine.holdTranscribe();
+      audio.speak(10);
+      audio.silence(6); // a cut: its decode is held
+      await settle();
+      await core.discard();
+
+      await core.startRecording();
+      audio.speak(10);
+      audio.silence(6);
+      await settle();
+      decoded();
+
+      expect((await core.stop())?.text).toBe('The real one.');
+    });
+  });
+
   describe('the 5-minute cap', () => {
     it('stops the Recording by itself at 5:00 and saves it as Stop does', async () => {
       const { audio, engine, core } = setup();
