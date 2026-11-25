@@ -1,12 +1,18 @@
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Linking, View } from 'react-native';
+import { Alert, Linking, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Text } from '@/components/ui/text';
 import { checkMicPermission, requestMicPermission, type MicPermission } from '@/lib/mic-permission';
-import { downloadSpeechModel, useSpeechModel } from '@/lib/speech-model-store';
+import {
+  cancelSpeechModelDownload,
+  deleteSpeechModel,
+  downloadSpeechModel,
+  useSpeechModel,
+  type SpeechModelState,
+} from '@/lib/speech-model-store';
 import {
   PARAKEET_UNIFIED_EN,
   PARAKEET_UNIFIED_EN_BYTES,
@@ -68,26 +74,92 @@ function MicRow() {
 
 function SpeechModelRow() {
   const model = useSpeechModel();
+  const size = `${mb(PARAKEET_UNIFIED_EN_BYTES)} MB`;
 
   return (
     <View className="gap-3">
       <View className="flex-row items-center justify-between gap-4">
         <View className="flex-1">
           <Text className="font-semibold">{PARAKEET_UNIFIED_EN.label}</Text>
-          <Text variant="muted">Speech Model · English · {mb(PARAKEET_UNIFIED_EN_BYTES)} MB</Text>
+          <Text variant="muted">Speech Model · English · {size}</Text>
         </View>
         {model.kind === 'installed' && <Text variant="muted">Installed</Text>}
-        {model.kind === 'not-installed' && (
+        {model.kind === 'not-installed' && model.problem?.kind !== 'mobile-data' && (
           <Button onPress={() => void downloadSpeechModel()}>
-            <Text>{model.error ? 'Retry' : 'Download'}</Text>
+            <Text>{downloadLabel(model)}</Text>
+          </Button>
+        )}
+        {model.kind === 'downloading' && (
+          <Button variant="outline" onPress={cancelSpeechModelDownload}>
+            <Text>Cancel</Text>
           </Button>
         )}
       </View>
       {model.kind === 'downloading' && <DownloadProgressView progress={model.progress} />}
-      {model.kind === 'not-installed' && model.error && (
-        <Text className="text-sm text-destructive">Download failed: {model.error}</Text>
+      {model.kind === 'not-installed' && <NotInstalledDetails model={model} size={size} />}
+      {model.kind === 'installed' && (
+        <Button variant="outline" className="self-start" onPress={confirmDelete}>
+          <Text>Delete Speech Model</Text>
+        </Button>
       )}
     </View>
+  );
+}
+
+type NotInstalled = Extract<SpeechModelState, { kind: 'not-installed' }>;
+
+function downloadLabel(model: NotInstalled) {
+  if (model.problem?.kind === 'failed' || model.problem?.kind === 'no-space') return 'Retry';
+  return model.bytesDownloaded > 0 ? 'Resume' : 'Download';
+}
+
+function NotInstalledDetails({ model, size }: { model: NotInstalled; size: string }) {
+  const { problem, bytesDownloaded } = model;
+  return (
+    <>
+      {bytesDownloaded > 0 && (
+        <View className="flex-row items-center justify-between gap-4">
+          <Text variant="muted">
+            {mb(bytesDownloaded)} of {size} downloaded
+          </Text>
+          <Text className="text-sm underline" onPress={() => void deleteSpeechModel()}>
+            Delete
+          </Text>
+        </View>
+      )}
+      {problem?.kind === 'mobile-data' && (
+        <View className="gap-3 rounded-md border border-border p-4">
+          <Text>
+            You&apos;re on mobile data. The rest of the download is{' '}
+            {mb(PARAKEET_UNIFIED_EN_BYTES - bytesDownloaded)} MB.
+          </Text>
+          <View className="flex-row gap-3">
+            <Button onPress={() => void downloadSpeechModel({ allowMobileData: true })}>
+              <Text>Download anyway</Text>
+            </Button>
+          </View>
+        </View>
+      )}
+      {problem?.kind === 'no-space' && (
+        <Text className="text-sm text-destructive">
+          {problem.message}. Free up space, then retry.
+        </Text>
+      )}
+      {problem?.kind === 'failed' && (
+        <Text className="text-sm text-destructive">Download failed: {problem.message}</Text>
+      )}
+    </>
+  );
+}
+
+function confirmDelete() {
+  Alert.alert(
+    'Delete the Speech Model?',
+    'Recording needs it. You can download it again from this screen.',
+    [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void deleteSpeechModel() },
+    ]
   );
 }
 

@@ -12,5 +12,13 @@ jest.mock('@dr.pogodin/react-native-fs', () => ({
   mkdir: jest.fn(() => Promise.resolve()),
   moveFile: jest.fn(() => Promise.resolve()),
   unlink: jest.fn(() => Promise.resolve()),
-  downloadFile: jest.fn(() => ({ jobId: 1, promise: new Promise(() => {}) })),
+  appendFile: jest.fn(() => Promise.resolve()),
+  getFSInfo: jest.fn(() => Promise.resolve({ freeSpace: 10e9, totalSpace: 100e9 })),
+}));
+
+// Nor do expo/fetch and expo-network: no download gets a response, and the phone is on Wi-Fi.
+jest.mock('expo/fetch', () => ({ fetch: jest.fn(() => new Promise(() => {})) }));
+jest.mock('expo-network', () => ({
+  NetworkStateType: { WIFI: 'WIFI', CELLULAR: 'CELLULAR' },
+  getNetworkStateAsync: jest.fn(() => Promise.resolve({ type: 'WIFI' })),
 }));

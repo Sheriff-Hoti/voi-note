@@ -25,7 +25,18 @@ export default function NotesList() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Notes' }} />
+      <Stack.Screen
+        options={{
+          title: 'Notes',
+          // Once installed, setup is still where the Speech Model can be deleted.
+          headerRight: () =>
+            model.kind === 'installed' && (
+              <Button variant="ghost" size="sm" onPress={() => router.push('/setup')}>
+                <Text>Speech Model</Text>
+              </Button>
+            ),
+        }}
+      />
       <View className="flex-1 items-center justify-center gap-4 bg-background p-4">
         <Text variant="muted">No notes yet</Text>
         {needsSetup && (
