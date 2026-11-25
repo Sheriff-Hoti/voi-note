@@ -8,6 +8,7 @@ Applied in review (`/code-review`). Linting, formatting and types are enforced b
 - **Assert what is observable from outside the module:** the Notes in the repository, emitted state, files created or deleted, download status, and what a fake saw arrive at a port (the bytes written, the byte offset a request asked for with `Range`, the time between requests on the fake clock). Leave out internals: chunk-boundary bookkeeping, private helpers, and which internal collaborator ran in what order. The test: it survives a rewrite of the module's internals that keeps its behaviour.
 - **Expected values come from an independent source:** a literal, a worked example, or the spec. Not a recomputation of what the code does.
 - **Fakes live next to their ports** (for example `src/model-installer/fakes.ts`) and stay scriptable, so a test states the scenario (`offline`, `stallAfter`, a bad `Content-Range`) instead of building it.
+- **A bug found on the phone gets a fake that reproduces it.** The fix adds a scriptable option to the fake for the device behaviour (for example the microphone delivering frames while it stops), plus a seam test that fails without the fix. A fake that is tidier than the device hides the bug from every later test.
 - **Time-based behaviour** (backoff, timeouts, the Undo window, the 5-minute cap) runs on Jest's fake timers, never real waits.
 
 ## Language

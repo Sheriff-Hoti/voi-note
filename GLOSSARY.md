@@ -18,7 +18,7 @@ _Avoid_: Transcription (for the text itself), output
 
 **Speech Model**:
 The on-device model that turns a Recording into a Transcript.
-_Avoid_: LLM, AI, engine
+_Avoid_: LLM, AI, engine. Exception: `SpeechEngine` is the name of its port in the voice-notes core (spec #1).
 
 **Pending Note**:
 A Note whose Recording has been stopped but whose Transcript is not ready yet.

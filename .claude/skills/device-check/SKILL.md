@@ -16,9 +16,11 @@ Run every command through `mise exec --` (the agent shell is not mise-activated,
    - Samsung device in `lsusb` but adb empty: USB debugging is off (Settings → Developer options → Debugging), or Auto Blocker blocks it. Ask the user.
    - `unauthorized`: ask the user to tap Allow on the phone.
 2. **Wake the phone.** `adb shell "dumpsys window | grep isKeyguardShowing"`: `true` means locked (a screenshot then comes back black or shows only the clock), so ask the user to unlock. Then keep the screen on for the session: save `adb shell settings get global stay_on_while_plugged_in` and run `adb shell svc power stayon usb`. Done when the keyguard is down and stay-on is set.
-3. **Build and install.** `npx expo run:android --device <serial>`, awaited with a short timeout so it moves to the background. It builds only arm64 (about 1.5 min incremental; a raw `./gradlew assembleDebug` builds every ABI and takes about 11 min). Done when its output shows `[ort-check] ok` and `Installing …app-debug.apk`, followed by `Waiting on http://localhost:8081` (Metro stays up).
-4. **Open the app on Metro.** A cold start or `am force-stop` lands on the dev-client launcher instead of the app, so open it by deep link over the cable:
+3. **Build and install.** `npx expo run:android --device <serial>`, awaited with a short timeout so it moves to the background. It builds only arm64 (about 1.5 min incremental; a raw `./gradlew assembleDebug` builds every ABI and takes about 11 min). Done when its output shows `[ort-check] ok`, then `Waiting on http://localhost:8081` (Metro stays up), `Installing …app-debug.apk`, and last `› Opening exp+voi-note://… on <device>`. Until that `Opening` line, the install is still running and restarts the app under you.
+   - `android/` is generated and gitignored. When `package.json` gained a native dependency or `app.json` a config plugin since the last build, regenerate it first: `npx expo prebuild --platform android --no-install` and `rm -rf android/build/generated/autolinking`. A stale `android/` builds fine, then the app fails with `Cannot find native module '…'`.
+4. **Open the app on Metro.** A cold start lands on the dev-client launcher instead of the app, so force-stop it and open it by deep link over the cable:
    ```sh
+   adb shell am force-stop com.voinote.app
    adb reverse tcp:8081 tcp:8081
    adb shell am start -a android.intent.action.VIEW -d "exp+voi-note://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081" com.voinote.app
    ```

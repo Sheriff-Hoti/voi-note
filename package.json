@@ -7,7 +7,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "test": "jest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "expo customize tsconfig.json > /dev/null && tsc --noEmit",
     "check:apk": "bash scripts/check-ort-symbol.sh android/app/build/outputs/apk",
     "postinstall": "bash scripts/use-sherpa-2.0.3.sh",
     "lint": "eslint . --max-warnings=0",
