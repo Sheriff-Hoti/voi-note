@@ -13,7 +13,7 @@ The user reviews every change before it reaches `main`. Never commit to `main`, 
 - Before starting a ticket (e.g. `/implement #3`): `git switch main && git pull`, then create a branch `ticket/<issue-number>-<short-slug>` (e.g. `ticket/3-model-download`). Commit all work there.
 - Write `Refs #<n>` in commit messages, not `Closes #<n>`. Closing happens when the PR merges.
 - When the ticket is done (tests, lint and the device check pass), push the branch and open a PR with `gh pr create`. Its body starts with `Closes #<n>`, then: what changed, how it was verified (on the phone too), and anything the reviewer should look at closely.
-- Stop after opening the PR. Don't merge it, don't close the issue, and don't start the next ticket. The user merges.
+- Stop after opening the PR. Merge only when the user says to, once CI passes; leave the issue to close with the merge, and leave the next ticket for the user to start.
 - Changes outside a ticket (docs, tooling, retro fixes) follow the same rule, on a `chore/<slug>` branch.
 
 ## Agent skills
@@ -25,6 +25,10 @@ Issues and specs live in GitHub Issues for Sheriff-Hoti/voi-note (via `gh`). See
 ### Triage labels
 
 Default five-role vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+
+### Coding standards
+
+`CODING_STANDARDS.md`: the judgement calls `/code-review` checks (tests, language, ADRs).
 
 ### Domain docs
 
