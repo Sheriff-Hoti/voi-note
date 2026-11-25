@@ -32,9 +32,13 @@ export class FakeAudioSource implements AudioSource {
     this.capturing = false;
   }
 
-  /** Sends `frames` 100 ms frames of speech-like audio (a 0.3 amplitude tone). */
+  /**
+   * Sends `frames` 100 ms frames of speech-like audio: a 0.3 amplitude tone, with every 4th frame a
+   * near-silent gap between words. Real speech has those gaps, and they keep the pause detector's noise
+   * floor down; a steady tone would drift into counting as pause after about 10 s.
+   */
   speak(frames: number): void {
-    for (let i = 0; i < frames; i++) this.send(tone(0.3));
+    for (let i = 0; i < frames; i++) this.send(tone(i % 4 === 3 ? 0.005 : 0.3));
   }
 
   /** Sends `frames` 100 ms frames of silence. */
@@ -68,12 +72,21 @@ export class FakeSpeechEngine implements SpeechEngine {
   /** The audio each transcribe() received, in order. */
   readonly received: Float32Array[] = [];
   private readonly transcripts: string[] = [];
+  private loadGate: Promise<void> | null = null;
+
+  /** Makes load() wait, as the real Speech Model takes seconds to load. Call the result to let it finish. */
+  holdLoad(): () => void {
+    let release!: () => void;
+    this.loadGate = new Promise((resolve) => (release = resolve));
+    return release;
+  }
 
   willTranscribe(...transcripts: string[]): void {
     this.transcripts.push(...transcripts);
   }
 
   async load() {
+    await this.loadGate;
     if (this.failToLoad) throw this.failToLoad;
     this.loads++;
     this.loaded = true;

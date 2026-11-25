@@ -17,7 +17,181 @@ function setup() {
   return { audio, engine, files, sql, clock, core };
 }
 
+/** Lets the decodes the core started finish. */
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+const FRAME = 1_600;
+
 describe('voice-notes core', () => {
+  describe('chunked transcription while recording', () => {
+    it('shows the text so far after a pause, and Stop decodes only the audio after it', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Buy milk.', 'Then call mum.');
+
+      await core.startRecording();
+      audio.speak(10);
+      audio.silence(6); // 0.6 s of pause: a cut
+      await settle();
+
+      expect(core.getState()).toEqual({
+        kind: 'recording',
+        elapsedMs: 1_600,
+        textSoFar: 'Buy milk.',
+      });
+
+      audio.speak(10);
+      const note = await core.stop();
+
+      // The chunk ends after the pause that cut it; Stop decodes only the last 10 frames.
+      expect(engine.received.map((s) => s.length / FRAME)).toEqual([16, 10]);
+      expect(note?.text).toBe('Buy milk. Then call mum.');
+      expect(note?.durationMs).toBe(2_600);
+    });
+
+    it('cuts 12 s of speech without a pause at 12 s', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('First part.', 'Second part.');
+
+      await core.startRecording();
+      audio.speak(150);
+      await core.stop();
+
+      expect(engine.received.map((s) => s.length / FRAME)).toEqual([120, 30]);
+    });
+
+    it('places the hard cut at the quietest 100 ms of the last few seconds', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('First part.', 'Second part.');
+
+      await core.startRecording();
+      audio.speak(100);
+      audio.silence(1); // a breath at 10 s
+      audio.speak(49);
+      await core.stop();
+
+      expect(engine.received.map((s) => s.length / FRAME)).toEqual([101, 49]);
+    });
+
+    it('decodes the chunks cut while the Speech Model loads once it is ready, in order', async () => {
+      const { audio, engine, core } = setup();
+      const loaded = engine.holdLoad();
+      engine.willTranscribe('One.', 'Two.', 'Three.');
+
+      await core.startRecording();
+      audio.speak(10);
+      audio.silence(6);
+      audio.speak(10);
+      audio.silence(6);
+      await settle();
+      expect(core.getState()).toMatchObject({ textSoFar: '' });
+
+      loaded();
+      await settle();
+      expect(core.getState()).toMatchObject({ textSoFar: 'One. Two.' });
+
+      audio.speak(10);
+      expect((await core.stop())?.text).toBe('One. Two. Three.');
+    });
+
+    it('joins a hard cut as one sentence: no stray period, no capital', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe(
+        'So tomorrow I.',
+        'Will call the bank and then.',
+        'I pick up the kids.'
+      );
+
+      await core.startRecording();
+      audio.speak(250); // two hard cuts, no pause
+      const note = await core.stop();
+
+      expect(note?.text).toBe('So tomorrow I will call the bank and then I pick up the kids.');
+    });
+
+    it('keeps a question or exclamation the model heard at a hard cut', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Did I lock the door?', 'Probably.');
+
+      await core.startRecording();
+      audio.speak(150);
+      const note = await core.stop();
+
+      expect(note?.text).toBe('Did I lock the door? Probably.');
+    });
+
+    it('continues a sentence the model left unfinished at a pause', async () => {
+      const { audio, engine, core } = setup();
+      // As on the phone: at a short pause the model often ends a chunk without punctuation.
+      engine.willTranscribe('It seems', 'Like it works.');
+
+      await core.startRecording();
+      audio.speak(10);
+      audio.silence(6);
+      audio.speak(10);
+      const note = await core.stop();
+
+      expect(note?.text).toBe('It seems like it works.');
+    });
+
+    it('keeps the punctuation of a cut at a pause', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Buy bread.', 'Water the plants.');
+
+      await core.startRecording();
+      audio.speak(10);
+      audio.silence(8);
+      audio.speak(10);
+      const note = await core.stop();
+
+      expect(note?.text).toBe('Buy bread. Water the plants.');
+    });
+
+    it('skips silent stretches: the Speech Model never hears them', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Remember the keys.');
+
+      await core.startRecording();
+      audio.silence(30);
+      audio.speak(10);
+      audio.silence(40);
+      const note = await core.stop();
+
+      // Only the speech and the pause that ended it are decoded (the pause holds up to 0.5 s of the silence before it).
+      expect(engine.received).toHaveLength(1);
+      expect(engine.received[0].length / FRAME).toBeLessThanOrEqual(5 + 10 + 6);
+      expect(engine.received[0].length / FRAME).toBeGreaterThanOrEqual(10 + 6);
+      expect(note?.text).toBe('Remember the keys.');
+    });
+
+    it('creates no Note and keeps no audio when nothing was said', async () => {
+      const { audio, engine, files, core } = setup();
+      const notesChanged = jest.fn();
+      core.onNotesChanged(notesChanged);
+
+      await core.startRecording();
+      audio.silence(50);
+      expect(await core.stop()).toBeNull();
+
+      expect(engine.received).toEqual([]);
+      expect(await core.listNotes()).toEqual([]);
+      expect([...files.files.keys()]).toEqual([]);
+      expect(notesChanged).not.toHaveBeenCalled();
+      expect(core.getState()).toEqual({ kind: 'idle' });
+    });
+
+    it('creates no Note when the Speech Model hears no words', async () => {
+      const { audio, engine, files, core } = setup();
+      engine.willTranscribe('  ');
+
+      await core.startRecording();
+      audio.speak(10);
+
+      expect(await core.stop()).toBeNull();
+      expect(await core.listNotes()).toEqual([]);
+      expect([...files.files.keys()]).toEqual([]);
+    });
+  });
+
   it('Stop transcribes the whole Recording into a ready Note', async () => {
     const { audio, engine, files, clock, core } = setup();
     engine.willTranscribe('Buy milk on the way home.');
@@ -28,10 +202,10 @@ describe('voice-notes core', () => {
     audio.silence(5);
     audio.speak(10);
     clock.time += 2_500;
-    const note = await core.stop();
+    const note = (await core.stop())!;
 
     expect(audio.capturing).toBe(false);
-    // This ticket decodes the whole Recording at once: one decode of all 25 frames (2.5 s at 16 kHz).
+    // A 0.5 s pause is too short to cut at: one decode of all 25 frames (2.5 s at 16 kHz).
     expect(engine.received.map((samples) => samples.length)).toEqual([40_000]);
     expect(note).toEqual({
       id: expect.any(String),
@@ -96,10 +270,10 @@ describe('voice-notes core', () => {
     await core.stop();
 
     expect(states).toEqual([
-      { kind: 'recording', elapsedMs: 0 },
-      { kind: 'recording', elapsedMs: 100 },
-      { kind: 'recording', elapsedMs: 200 },
-      { kind: 'recording', elapsedMs: 300 },
+      { kind: 'recording', elapsedMs: 0, textSoFar: '' },
+      { kind: 'recording', elapsedMs: 100, textSoFar: '' },
+      { kind: 'recording', elapsedMs: 200, textSoFar: '' },
+      { kind: 'recording', elapsedMs: 300, textSoFar: '' },
       { kind: 'finishing' },
       { kind: 'idle' },
     ]);
@@ -124,7 +298,7 @@ describe('voice-notes core', () => {
     await core.startRecording();
     audio.speak(10);
     core.subscribe(() => states.push(core.getState()));
-    const note = await core.stop();
+    const note = (await core.stop())!;
 
     expect(engine.received.map((samples) => samples.length)).toEqual([12 * 1_600]);
     expect(note.durationMs).toBe(1_200);

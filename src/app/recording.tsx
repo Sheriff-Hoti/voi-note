@@ -1,6 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
-import { useEffect } from 'react';
-import { ActivityIndicator, Alert, BackHandler, View } from 'react-native';
+import { useEffect, useRef, type ComponentRef } from 'react';
+import { ActivityIndicator, Alert, BackHandler, ScrollView, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
@@ -10,6 +10,7 @@ import { stopRecording, useCaptureState } from '@/lib/voice-notes-store';
 export default function Recording() {
   const router = useRouter();
   const state = useCaptureState();
+  const textView = useRef<ComponentRef<typeof ScrollView>>(null);
 
   // Leaving would orphan the Recording: Back does nothing until it is Stopped.
   useEffect(() => {
@@ -20,7 +21,9 @@ export default function Recording() {
   async function stop() {
     try {
       const note = await stopRecording();
-      router.replace({ pathname: '/notes/[id]', params: { id: note.id } });
+      // Nothing was said: there is no Note to open.
+      if (note) router.replace({ pathname: '/notes/[id]', params: { id: note.id } });
+      else router.back();
     } catch (error) {
       console.error('[recording] Stop failed', error);
       Alert.alert("Couldn't make the Note", error instanceof Error ? error.message : String(error));
@@ -48,6 +51,16 @@ export default function Recording() {
             <Text className="text-6xl font-light tabular-nums">
               {elapsed(state.kind === 'recording' ? state.elapsedMs : 0)}
             </Text>
+            <ScrollView
+              className="max-h-64 w-full"
+              contentContainerClassName="grow justify-end"
+              ref={textView}
+              onContentSizeChange={() => textView.current?.scrollToEnd({ animated: false })}
+            >
+              <Text className="text-lg leading-7">
+                {state.kind === 'recording' ? state.textSoFar : ''}
+              </Text>
+            </ScrollView>
             <Button
               size="lg"
               variant="destructive"

@@ -1,4 +1,6 @@
+import { concat, createChunker, type Chunk, type Chunker, type Cut } from './chunker';
 import { createNotesRepository, type Note } from './notes-repository';
+import { joinTranscript } from './transcript';
 import {
   SAMPLE_RATE,
   type AudioFiles,
@@ -13,8 +15,11 @@ export type { Note } from './notes-repository';
 /** What the capture side of the app is doing, for the screens. */
 export type CaptureState =
   | { kind: 'idle' }
-  /** `elapsedMs`: how much audio the Recording holds so far. */
-  | { kind: 'recording'; elapsedMs: number }
+  /**
+   * `elapsedMs`: how much audio the Recording holds so far. `textSoFar`: the Transcript of the chunks
+   * decoded so far, a few seconds behind the speaker.
+   */
+  | { kind: 'recording'; elapsedMs: number; textSoFar: string }
   /** Stopped; the Transcript is being made. */
   | { kind: 'finishing' };
 
@@ -31,10 +36,11 @@ export interface VoiceNotes {
    */
   startRecording(): Promise<void>;
   /**
-   * Stops the Recording, transcribes all of it, and resolves the new ready Note. The Recording's audio
-   * is kept as a WAV. Rejects when not recording, or when the Speech Model fails.
+   * Stops the Recording, waits for its last chunk to be transcribed, and resolves the new ready Note,
+   * its audio kept as a WAV. When nothing was said (an empty Transcript) it resolves null instead: no
+   * Note is made and the audio is deleted. Rejects when not recording, or when the Speech Model fails.
    */
-  stop(): Promise<Note>;
+  stop(): Promise<Note | null>;
 
   /** Every Note, newest first. */
   listNotes(): Promise<Note[]>;
@@ -54,7 +60,7 @@ export function createVoiceNotes(deps: {
   const notesListeners = new Set<() => void>();
   let state: CaptureState = { kind: 'idle' };
   let speechModelReady: Promise<void> | null = null;
-  let recording: { startedAt: number; frames: Float32Array[]; samples: number } | null = null;
+  let recording: Recording | null = null;
 
   function setState(next: CaptureState) {
     state = next;
@@ -75,6 +81,33 @@ export function createVoiceNotes(deps: {
 
   const msOf = (samples: number) => Math.round((samples / SAMPLE_RATE) * 1000);
 
+  function showRecording(current: Recording) {
+    if (recording === current && state.kind !== 'finishing')
+      setState({
+        kind: 'recording',
+        elapsedMs: msOf(current.samples),
+        textSoFar: current.transcript,
+      });
+  }
+
+  /** Queues a chunk's decode after the ones before it; they wait for the Speech Model to load. */
+  function decode(current: Recording, chunk: Chunk) {
+    current.decodeQueue = current.decodeQueue.then(async () => {
+      if (current.failure) return;
+      try {
+        await loadSpeechModel();
+        const text = (await engine.transcribe(chunk.samples)).trim();
+        if (text) {
+          current.transcript = joinTranscript(current.transcript, current.lastCut, text);
+          current.lastCut = chunk.cut;
+        }
+        showRecording(current);
+      } catch (error) {
+        current.failure = { error };
+      }
+    });
+  }
+
   return {
     getState: () => state,
     subscribe(listener) {
@@ -88,17 +121,26 @@ export function createVoiceNotes(deps: {
 
     async startRecording() {
       if (state.kind !== 'idle') throw new Error(`Can't start a Recording while ${state.kind}`);
-      const current = { startedAt: clock.now(), frames: [] as Float32Array[], samples: 0 };
+      const current: Recording = {
+        startedAt: clock.now(),
+        frames: [],
+        samples: 0,
+        chunker: createChunker((chunk) => decode(current, chunk)),
+        transcript: '',
+        lastCut: null,
+        decodeQueue: Promise.resolve(),
+        failure: null,
+      };
       recording = current;
-      setState({ kind: 'recording', elapsedMs: 0 });
+      showRecording(current);
       try {
         await audio.start((frame) => {
           if (recording !== current) return;
           current.frames.push(frame);
           current.samples += frame.length;
+          current.chunker.push(frame);
           // While stopping, the microphone still flushes its last frames: kept, but no longer shown.
-          if (state.kind === 'recording')
-            setState({ kind: 'recording', elapsedMs: msOf(current.samples) });
+          showRecording(current);
         });
       } catch (error) {
         recording = null;
@@ -120,17 +162,19 @@ export function createVoiceNotes(deps: {
         recording = null;
         // Read only now: frames delivered while the microphone stopped belong to the Recording.
         const { startedAt, frames, samples } = current;
-        const all = concat(frames, samples);
+        current.chunker.end();
         const id = uuid();
-        const audioPath = await files.writeWav(id, all);
-        let text: string;
-        try {
-          await loadSpeechModel();
-          text = (await engine.transcribe(all)).trim();
-        } catch (error) {
+        const audioPath = await files.writeWav(id, concat(frames));
+        await current.decodeQueue;
+        if (current.failure) {
           // No Note points at the audio, so don't leave it behind. (Ticket #9 keeps it as a Pending Note.)
           await files.remove(audioPath).catch(() => {});
-          throw error;
+          throw current.failure.error;
+        }
+        const text = current.transcript;
+        if (!text) {
+          await files.remove(audioPath);
+          return null;
         }
         const note: Note = {
           id,
@@ -154,15 +198,20 @@ export function createVoiceNotes(deps: {
   };
 }
 
-function concat(frames: Float32Array[], samples: number): Float32Array {
-  const out = new Float32Array(samples);
-  let offset = 0;
-  for (const frame of frames) {
-    out.set(frame, offset);
-    offset += frame.length;
-  }
-  return out;
-}
+type Recording = {
+  startedAt: number;
+  frames: Float32Array[];
+  samples: number;
+  chunker: Chunker;
+  /** The Transcript of the chunks decoded so far. */
+  transcript: string;
+  /** How the last chunk with words in it was cut. */
+  lastCut: Cut | null;
+  /** Settles when every chunk queued so far is decoded. */
+  decodeQueue: Promise<void>;
+  /** Set when a decode failed; the chunks after it are not decoded. */
+  failure: { error: unknown } | null;
+};
 
 /** A random (v4) UUID. Hermes has no crypto.randomUUID. */
 function uuid(): string {
