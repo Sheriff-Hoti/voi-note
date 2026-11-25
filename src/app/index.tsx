@@ -1,6 +1,6 @@
 import { Stack, useRouter } from 'expo-router';
 import { Mic } from 'lucide-react-native';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, FlatList, Linking, Pressable, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,13 @@ import { Text } from '@/components/ui/text';
 import { firstLine, noteDate } from '@/lib/format';
 import { checkMicPermission, requestMicPermission } from '@/lib/mic-permission';
 import { useSpeechModel } from '@/lib/speech-model-store';
-import { launchApp, startRecording, useNotes } from '@/lib/voice-notes-store';
+import {
+  launchApp,
+  startRecording,
+  undoDiscard,
+  useCaptureState,
+  useNotes,
+} from '@/lib/voice-notes-store';
 import type { Note } from '@/voice-notes';
 
 // Once per app process: after the user goes Back from setup, the list must stay put.
@@ -102,6 +108,7 @@ export default function NotesList() {
             ) : undefined
           }
         />
+        <DiscardedSnackbar />
         {model.kind === 'installed' && (
           <View className="absolute bottom-10 left-0 right-0 items-center">
             <Pressable
@@ -116,6 +123,38 @@ export default function NotesList() {
         )}
       </View>
     </>
+  );
+}
+
+/** "Discarded · Undo" for the Undo window after a Discard; Undo opens the Note as Stop would. */
+function DiscardedSnackbar() {
+  const router = useRouter();
+  const state = useCaptureState();
+  const [undoing, setUndoing] = useState(false);
+
+  async function undo() {
+    setUndoing(true);
+    try {
+      const note = await undoDiscard();
+      if (note) router.push({ pathname: '/notes/[id]', params: { id: note.id } });
+    } catch (error) {
+      console.error('[notes] Undo failed', error);
+      Alert.alert("Couldn't make the Note", error instanceof Error ? error.message : String(error));
+    } finally {
+      setUndoing(false);
+    }
+  }
+
+  if (state.kind !== 'discarded' && !undoing) return null;
+  return (
+    <View className="absolute bottom-36 left-4 right-4 flex-row items-center justify-between rounded-lg bg-foreground px-4 py-2 shadow-lg">
+      <Text className="text-background">{undoing ? 'Transcribing…' : 'Discarded'}</Text>
+      {!undoing && (
+        <Button variant="ghost" size="sm" onPress={() => void undo()}>
+          <Text className="font-semibold text-background">Undo</Text>
+        </Button>
+      )}
+    </View>
   );
 }
 

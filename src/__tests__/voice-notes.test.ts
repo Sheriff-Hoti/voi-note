@@ -437,4 +437,133 @@ describe('voice-notes core', () => {
       expect((await core.stop())?.text).toBe('Still works.');
     });
   });
+
+  describe('Discard and Undo', () => {
+    beforeEach(() => jest.useFakeTimers({ doNotFake: ['setImmediate'] }));
+    afterEach(() => jest.useRealTimers());
+
+    it('Discard makes no Note, and deletes the audio once the 5 s Undo window passes', async () => {
+      const { audio, engine, files, core } = setup();
+      engine.willTranscribe('Never mind.');
+      const notesChanged = jest.fn();
+      core.onNotesChanged(notesChanged);
+
+      await core.startRecording();
+      audio.speak(10);
+      await core.discard();
+
+      expect(audio.capturing).toBe(false);
+      expect(core.getState()).toEqual({ kind: 'discarded' });
+      expect(files.files.size).toBe(1); // held for Undo
+
+      jest.advanceTimersByTime(4_999);
+      await settle();
+      expect(files.files.size).toBe(1);
+
+      jest.advanceTimersByTime(1);
+      await settle();
+      expect(core.getState()).toEqual({ kind: 'idle' });
+      expect([...files.files.keys()]).toEqual([]);
+      expect(await core.listNotes()).toEqual([]);
+      expect(notesChanged).not.toHaveBeenCalled();
+    });
+
+    it('Undo inside the window makes the Note, as if Stop had been tapped', async () => {
+      const { audio, engine, files, clock, core } = setup();
+      engine.willTranscribe('Keep this after all.');
+      const startedAt = clock.time;
+
+      await core.startRecording();
+      audio.speak(10);
+      await core.discard();
+      jest.advanceTimersByTime(4_000);
+      const note = (await core.undoDiscard())!;
+
+      expect(note).toEqual({
+        id: expect.any(String),
+        createdAt: startedAt,
+        status: 'ready',
+        text: 'Keep this after all.',
+        audioPath: expect.any(String),
+        durationMs: 1_000,
+      });
+      expect(await core.listNotes()).toEqual([note]);
+      expect(core.getState()).toEqual({ kind: 'idle' });
+
+      // The window's end no longer deletes anything: the audio is the Note's.
+      jest.advanceTimersByTime(10_000);
+      await settle();
+      expect([...files.files.keys()]).toEqual([note.audioPath]);
+    });
+
+    it('Undo after the window makes no Note', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Too late.');
+
+      await core.startRecording();
+      audio.speak(10);
+      await core.discard();
+      jest.advanceTimersByTime(5_000);
+
+      await expect(core.undoDiscard()).rejects.toThrow();
+      expect(await core.listNotes()).toEqual([]);
+    });
+
+    it('a new Recording during the window ends it: the Discarded audio is deleted', async () => {
+      const { audio, engine, files, core } = setup();
+      await core.startRecording();
+      audio.speak(10);
+      await core.discard();
+      engine.willTranscribe('The real one.');
+      await core.startRecording();
+      await settle();
+
+      expect([...files.files.keys()]).toEqual([]);
+      await expect(core.undoDiscard()).rejects.toThrow();
+      audio.speak(10);
+      expect((await core.stop())?.text).toBe('The real one.');
+    });
+  });
+
+  describe('Discard and the background', () => {
+    it('going to the background ends the Undo window: the audio is deleted and the Speech Model released', async () => {
+      const { audio, engine, files, core } = setup();
+      await core.startRecording();
+      audio.speak(10);
+      await core.discard();
+      await settle();
+      expect(engine.loaded).toBe(true);
+
+      core.appStateChanged('background');
+      await settle();
+
+      expect([...files.files.keys()]).toEqual([]);
+      expect(core.getState()).toEqual({ kind: 'idle' });
+      expect(engine.loaded).toBe(false);
+      await expect(core.undoDiscard()).rejects.toThrow();
+    });
+  });
+
+  describe('the 5-minute cap', () => {
+    it('stops the Recording by itself at 5:00 and saves it as Stop does', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Five minutes of thought.');
+
+      await core.startRecording();
+      audio.speak(2_999); // 4:59.9
+      expect(audio.capturing).toBe(true);
+      expect(core.getState()).toMatchObject({ kind: 'recording' });
+
+      audio.speak(1);
+      expect(core.getState()).toEqual({ kind: 'finishing' });
+
+      // The screen, seeing it finish, asks Stop for the Note and gets the cap's.
+      const note = (await core.stop())!;
+      expect(audio.capturing).toBe(false);
+      expect(note.text).toBe('Five minutes of thought.');
+      expect(note.durationMs).toBe(300_000);
+      expect(await core.listNotes()).toEqual([note]);
+      expect(core.getState()).toEqual({ kind: 'idle' });
+    });
+  });
 });

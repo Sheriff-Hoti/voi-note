@@ -1,12 +1,14 @@
 import { Stack, useRouter } from 'expo-router';
 import { useKeepAwake } from 'expo-keep-awake';
+import { X } from 'lucide-react-native';
 import { useEffect, useRef, type ComponentRef } from 'react';
 import { ActivityIndicator, Alert, BackHandler, ScrollView, View } from 'react-native';
 
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
 import { elapsed } from '@/lib/format';
-import { stopRecording, useCaptureState } from '@/lib/voice-notes-store';
+import { discardRecording, stopRecording, useCaptureState } from '@/lib/voice-notes-store';
 
 export default function Recording() {
   const router = useRouter();
@@ -21,7 +23,16 @@ export default function Recording() {
     return () => sub.remove();
   }, [state.kind]);
 
+  const stopping = useRef(false);
+
+  // The 5-minute cap stops the Recording by itself: open its Note as a tapped Stop does.
+  useEffect(() => {
+    if (state.kind === 'finishing') void stop();
+  });
+
   async function stop() {
+    if (stopping.current) return;
+    stopping.current = true;
     try {
       const note = await stopRecording();
       // Nothing was said: there is no Note to open.
@@ -32,6 +43,16 @@ export default function Recording() {
       Alert.alert("Couldn't make the Note", error instanceof Error ? error.message : String(error));
       router.back();
     }
+  }
+
+  // The notes list shows "Discarded · Undo".
+  async function discard() {
+    try {
+      await discardRecording();
+    } catch (error) {
+      console.error('[recording] Discard failed', error);
+    }
+    router.back();
   }
 
   return (
@@ -64,15 +85,27 @@ export default function Recording() {
                 {state.kind === 'recording' ? state.textSoFar : ''}
               </Text>
             </ScrollView>
-            <Button
-              size="lg"
-              variant="destructive"
-              className="h-16 w-40 rounded-full"
-              disabled={state.kind !== 'recording'}
-              onPress={() => void stop()}
-            >
-              <Text className="text-lg">Stop</Text>
-            </Button>
+            <View className="flex-row items-center gap-6">
+              <Button
+                size="icon"
+                variant="outline"
+                accessibilityLabel="Discard"
+                className="h-16 w-16 rounded-full"
+                disabled={state.kind !== 'recording'}
+                onPress={() => void discard()}
+              >
+                <Icon as={X} size={28} />
+              </Button>
+              <Button
+                size="lg"
+                variant="destructive"
+                className="h-16 w-40 rounded-full"
+                disabled={state.kind !== 'recording'}
+                onPress={() => void stop()}
+              >
+                <Text className="text-lg">Stop</Text>
+              </Button>
+            </View>
           </>
         )}
       </View>

@@ -21,7 +21,14 @@ export type CaptureState =
    */
   | { kind: 'recording'; elapsedMs: number; textSoFar: string }
   /** Stopped; the Transcript is being made. */
-  | { kind: 'finishing' };
+  | { kind: 'finishing' }
+  /** Discarded: no Note, and its audio is kept for UNDO_WINDOW_MS in case of an Undo. */
+  | { kind: 'discarded' };
+
+/** How long a Discarded Recording can be restored with Undo before its audio is deleted. */
+export const UNDO_WINDOW_MS = 5_000;
+/** A Recording stops by itself, as Stop does, once it holds 5 minutes of audio. */
+const MAX_RECORDING_SAMPLES = 5 * 60 * SAMPLE_RATE;
 
 export interface VoiceNotes {
   getState(): CaptureState;
@@ -38,22 +45,37 @@ export interface VoiceNotes {
   launch(options: { fresh: boolean; speechModelInstalled: boolean }): Promise<boolean>;
   /**
    * Tells the core when the app goes to the background and comes back. Never starts a Recording. In the
-   * background the Speech Model is released (after the Recording, if one is running); coming back loads
-   * it again (ADR 0004).
+   * background the Speech Model is released (after the Recording, if one is running), and a Discard's
+   * Undo window ends at once, since its timer can't run there; coming back loads it again (ADR 0004).
    */
   appStateChanged(appState: 'active' | 'background'): void;
 
   /**
    * Starts a Recording, and loads the Speech Model if it isn't loaded yet. Audio is buffered while it
-   * loads. Rejects when not idle, or when the microphone can't start.
+   * loads. Starting one during a Discard's Undo window ends that window. Rejects when recording or
+   * finishing, or when the microphone can't start.
    */
   startRecording(): Promise<void>;
   /**
    * Stops the Recording, waits for its last chunk to be transcribed, and resolves the new ready Note,
    * its audio kept as a WAV. When nothing was said (an empty Transcript) it resolves null instead: no
-   * Note is made and the audio is deleted. Rejects when not recording, or when the Speech Model fails.
+   * Note is made and the audio is deleted. A Recording that reaches 5 minutes stops by itself the same
+   * way, with no warning; calling stop() while a Note is being saved (the cap's, or an Undo's) resolves
+   * that one. Rejects when not recording, or when the Speech Model fails.
    */
   stop(): Promise<Note | null>;
+
+  /**
+   * Discards the Recording: the microphone stops and no Note is made. Its audio is kept for
+   * UNDO_WINDOW_MS (state `discarded`), then deleted. Starting a new Recording ends the window early.
+   * Resolves once the microphone has stopped. Rejects when not recording.
+   */
+  discard(): Promise<void>;
+  /**
+   * Undo of a Discard, within its window: restores the Recording as if Stop had been tapped, and
+   * resolves what stop() would. Rejects when there is no Discard to undo (its window has passed).
+   */
+  undoDiscard(): Promise<Note | null>;
 
   /** Every Note, newest first. */
   listNotes(): Promise<Note[]>;
@@ -74,6 +96,10 @@ export function createVoiceNotes(deps: {
   let state: CaptureState = { kind: 'idle' };
   let speechModelReady: Promise<void> | null = null;
   let recording: Recording | null = null;
+  /** The Discarded Recording, while its Undo window runs. */
+  let discarded: Discarded | null = null;
+  /** The Note being saved by Stop, the cap or Undo. */
+  let finishing: Promise<Note | null> | null = null;
   /** Settles once the last release of the Speech Model is done; a load waits for it. */
   let releaseDone: Promise<void> = Promise.resolve();
   let inBackground = false;
@@ -114,7 +140,7 @@ export function createVoiceNotes(deps: {
   const msOf = (samples: number) => Math.round((samples / SAMPLE_RATE) * 1000);
 
   function showRecording(current: Recording) {
-    if (recording === current && state.kind !== 'finishing')
+    if (recording === current && !current.ended)
       setState({
         kind: 'recording',
         elapsedMs: msOf(current.samples),
@@ -125,7 +151,7 @@ export function createVoiceNotes(deps: {
   /** Queues a chunk's decode after the ones before it; they wait for the Speech Model to load. */
   function decode(current: Recording, chunk: Chunk) {
     current.decodeQueue = current.decodeQueue.then(async () => {
-      if (current.failure) return;
+      if (current.failure || current.dropped) return;
       try {
         await loadSpeechModel();
         const text = (await engine.transcribe(chunk.samples)).trim();
@@ -137,6 +163,78 @@ export function createVoiceNotes(deps: {
       } catch (error) {
         current.failure = { error };
       }
+    });
+  }
+
+  /** Stops the microphone and writes the Recording's audio. Resolves its path. */
+  async function endCapture(current: Recording, id: string): Promise<string> {
+    try {
+      await audio.stop();
+    } finally {
+      recording = null;
+    }
+    // Read only now: frames delivered while the microphone stopped belong to the Recording.
+    return files.writeWav(id, concat(current.frames));
+  }
+
+  /**
+   * Transcribes the rest of a stopped Recording and saves it as a ready Note. Resolves null, and deletes
+   * the audio, when nothing was said.
+   */
+  async function saveNote(current: Recording, id: string, audioPath: string): Promise<Note | null> {
+    current.chunker.end();
+    await current.decodeQueue;
+    if (current.failure) {
+      // No Note points at the audio, so don't leave it behind. (Ticket #9 keeps it as a Pending Note.)
+      await files.remove(audioPath).catch(() => {});
+      throw current.failure.error;
+    }
+    const text = current.transcript;
+    if (!text) {
+      await files.remove(audioPath);
+      return null;
+    }
+    const note: Note = {
+      id,
+      createdAt: current.startedAt,
+      status: 'ready',
+      text,
+      audioPath,
+      durationMs: msOf(current.samples),
+    };
+    await notes.insert(note);
+    notesListeners.forEach((l) => l());
+    return note;
+  }
+
+  /** Shows `finishing` while `save` runs (Stop, the cap or Undo), then idle. */
+  function finish(save: () => Promise<Note | null>): Promise<Note | null> {
+    setState({ kind: 'finishing' });
+    const saving = save().finally(() => {
+      finishing = null;
+      setState({ kind: 'idle' });
+      if (inBackground) releaseSpeechModel();
+    });
+    finishing = saving;
+    return saving;
+  }
+
+  /** Ends the Undo window of the Discarded Recording: its audio is deleted. */
+  function endUndoWindow() {
+    const held = discarded;
+    if (!held) return;
+    clearTimeout(held.timer);
+    discarded = null;
+    held.recording.dropped = true;
+    held.audioPath
+      .then((path) => files.remove(path))
+      .catch((error: unknown) =>
+        console.error('[voice-notes] deleting Discarded audio failed', error)
+      );
+    if (state.kind === 'discarded') setState({ kind: 'idle' });
+    // Its last decodes may still run: release once they are done.
+    void held.recording.decodeQueue.then(() => {
+      if (inBackground && !recording && !discarded && state.kind === 'idle') releaseSpeechModel();
     });
   }
 
@@ -165,7 +263,11 @@ export function createVoiceNotes(deps: {
       inBackground = appState === 'background';
       // A Recording keeps the Speech Model: Stop releases it if the app is still in the background.
       if (inBackground) {
-        if (!recording) releaseSpeechModel();
+        // Timers don't fire in the background (ADR 0004): the Undo window ends here, and releases
+        // the Speech Model once its last decodes are done.
+        // While a Note is saved, finish() releases it once the last decode is done.
+        if (discarded) endUndoWindow();
+        else if (!recording && !finishing) releaseSpeechModel();
         return;
       }
       if (reloadWhenActive) {
@@ -175,6 +277,9 @@ export function createVoiceNotes(deps: {
     },
 
     async startRecording() {
+      // Its decodes go after the Discarded Recording's last one: one decode at a time on the Speech Model.
+      const decodesBefore = discarded?.recording.decodeQueue ?? Promise.resolve();
+      if (state.kind === 'discarded') endUndoWindow();
       if (state.kind !== 'idle') throw new Error(`Can't start a Recording while ${state.kind}`);
       const current: Recording = {
         startedAt: clock.now(),
@@ -183,8 +288,10 @@ export function createVoiceNotes(deps: {
         chunker: createChunker((chunk) => decode(current, chunk)),
         transcript: '',
         lastCut: null,
-        decodeQueue: Promise.resolve(),
+        decodeQueue: decodesBefore,
         failure: null,
+        ended: false,
+        dropped: false,
       };
       recording = current;
       showRecording(current);
@@ -196,6 +303,14 @@ export function createVoiceNotes(deps: {
           current.chunker.push(frame);
           // While stopping, the microphone still flushes its last frames: kept, but no longer shown.
           showRecording(current);
+          // The cap counts audio, not a timer: timers don't fire in the background (ADR 0004).
+          if (current.samples >= MAX_RECORDING_SAMPLES && !current.ended) {
+            voiceNotes
+              .stop()
+              .catch((error: unknown) =>
+                console.error('[voice-notes] Stop at the cap failed', error)
+              );
+          }
         });
       } catch (error) {
         recording = null;
@@ -206,47 +321,43 @@ export function createVoiceNotes(deps: {
       loadSpeechModel().catch(() => {});
     },
 
-    async stop() {
+    stop() {
+      // The cap stopped it already: a Stop tapped meanwhile gets the same Note.
+      if (finishing) return finishing;
       if (state.kind !== 'recording' || !recording) {
-        throw new Error(`Can't Stop while ${state.kind}`);
+        return Promise.reject(new Error(`Can't Stop while ${state.kind}`));
       }
       const current = recording;
-      setState({ kind: 'finishing' });
-      try {
-        await audio.stop();
-        recording = null;
-        // Read only now: frames delivered while the microphone stopped belong to the Recording.
-        const { startedAt, frames, samples } = current;
-        current.chunker.end();
-        const id = uuid();
-        const audioPath = await files.writeWav(id, concat(frames));
-        await current.decodeQueue;
-        if (current.failure) {
-          // No Note points at the audio, so don't leave it behind. (Ticket #9 keeps it as a Pending Note.)
-          await files.remove(audioPath).catch(() => {});
-          throw current.failure.error;
-        }
-        const text = current.transcript;
-        if (!text) {
-          await files.remove(audioPath);
-          return null;
-        }
-        const note: Note = {
-          id,
-          createdAt: startedAt,
-          status: 'ready',
-          text,
-          audioPath,
-          durationMs: msOf(samples),
-        };
-        await notes.insert(note);
-        notesListeners.forEach((l) => l());
-        return note;
-      } finally {
-        recording = null;
-        setState({ kind: 'idle' });
-        if (inBackground) releaseSpeechModel();
+      current.ended = true;
+      const id = uuid();
+      return finish(async () => saveNote(current, id, await endCapture(current, id)));
+    },
+
+    async discard() {
+      if (state.kind !== 'recording' || !recording) {
+        throw new Error(`Can't Discard while ${state.kind}`);
       }
+      const current = recording;
+      current.ended = true;
+      const id = uuid();
+      const audioPath = endCapture(current, id);
+      audioPath.catch(() => {}); // Rejects to the caller below; nothing to delete then.
+      discarded = {
+        recording: current,
+        id,
+        audioPath,
+        timer: setTimeout(endUndoWindow, UNDO_WINDOW_MS),
+      };
+      setState({ kind: 'discarded' });
+      await audioPath;
+    },
+
+    async undoDiscard() {
+      const held = discarded;
+      if (!held || state.kind !== 'discarded') throw new Error('Nothing to Undo');
+      clearTimeout(held.timer);
+      discarded = null;
+      return finish(async () => saveNote(held.recording, held.id, await held.audioPath));
     },
 
     listNotes: () => notes.list(),
@@ -268,6 +379,18 @@ type Recording = {
   decodeQueue: Promise<void>;
   /** Set when a decode failed; the chunks after it are not decoded. */
   failure: { error: unknown } | null;
+  /** Stopped or Discarded: its frames are no longer shown. */
+  ended: boolean;
+  /** Discarded for good: its remaining chunks are not decoded. */
+  dropped: boolean;
+};
+
+type Discarded = {
+  recording: Recording;
+  id: string;
+  /** Resolves once the microphone stopped and the audio is written. */
+  audioPath: Promise<string>;
+  timer: ReturnType<typeof setTimeout>;
 };
 
 /** A random (v4) UUID. Hermes has no crypto.randomUUID. */
