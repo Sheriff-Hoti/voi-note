@@ -326,4 +326,115 @@ describe('voice-notes core', () => {
     expect([...files.files.keys()]).toEqual([]);
     expect(core.getState()).toEqual({ kind: 'idle' });
   });
+
+  describe('Instant Capture', () => {
+    it('starts a Recording on a fresh launch with the Speech Model installed', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Call the plumber.');
+
+      await core.launch({ fresh: true, speechModelInstalled: true });
+
+      expect(audio.capturing).toBe(true);
+      expect(core.getState()).toMatchObject({ kind: 'recording' });
+      audio.speak(10);
+      expect((await core.stop())?.text).toBe('Call the plumber.');
+    });
+
+    it('keeps what is said while the Speech Model loads: the microphone starts first', async () => {
+      const { audio, engine, core } = setup();
+      const loaded = engine.holdLoad();
+      engine.willTranscribe('Pick up the parcel.', 'Before six.');
+
+      // Resolves with the Speech Model still loading (about 6 s on the phone).
+      await core.launch({ fresh: true, speechModelInstalled: true });
+      expect(audio.capturing).toBe(true);
+      audio.speak(10);
+      audio.silence(6);
+      audio.speak(10);
+
+      loaded();
+      const note = await core.stop();
+
+      expect(engine.received.map((s) => s.length / FRAME)).toEqual([16, 10]);
+      expect(note?.text).toBe('Pick up the parcel. Before six.');
+    });
+
+    it('does not record when the app comes back from the background', async () => {
+      const { audio, core } = setup();
+      await core.launch({ fresh: true, speechModelInstalled: true });
+      await core.stop();
+
+      core.appStateChanged('background');
+      core.appStateChanged('active');
+
+      expect(audio.capturing).toBe(false);
+      expect(core.getState()).toEqual({ kind: 'idle' });
+    });
+
+    it('does not record on a launch that is not fresh', async () => {
+      const { audio, core } = setup();
+
+      await core.launch({ fresh: false, speechModelInstalled: true });
+
+      expect(audio.capturing).toBe(false);
+      expect(core.getState()).toEqual({ kind: 'idle' });
+    });
+
+    it('does not record, nor load the Speech Model, when none is installed', async () => {
+      const { audio, engine, core } = setup();
+
+      await core.launch({ fresh: true, speechModelInstalled: false });
+      await settle();
+
+      expect(audio.capturing).toBe(false);
+      expect(engine.loads).toBe(0);
+      expect(core.getState()).toEqual({ kind: 'idle' });
+    });
+  });
+
+  describe('releasing the Speech Model in the background', () => {
+    it('releases it as soon as the app goes to the background, and loads it again on return', async () => {
+      const { engine, core } = setup();
+      await core.launch({ fresh: false, speechModelInstalled: true });
+      await settle();
+      expect(engine.loaded).toBe(true);
+
+      core.appStateChanged('background');
+      await settle();
+      expect(engine.loaded).toBe(false);
+
+      core.appStateChanged('active');
+      await settle();
+      expect(engine.loaded).toBe(true);
+      expect(engine.loads).toBe(2);
+    });
+
+    it('keeps it through a Recording that runs in the background, and releases it at Stop', async () => {
+      const { audio, engine, core } = setup();
+      engine.willTranscribe('Long thought.');
+      await core.launch({ fresh: true, speechModelInstalled: true });
+
+      core.appStateChanged('background');
+      audio.speak(10);
+      await settle();
+      expect(engine.loaded).toBe(true);
+
+      expect((await core.stop())?.text).toBe('Long thought.');
+      await settle();
+      expect(engine.loaded).toBe(false);
+    });
+
+    it('transcribes the next Recording after a release', async () => {
+      const { audio, engine, core } = setup();
+      await core.launch({ fresh: false, speechModelInstalled: true });
+      core.appStateChanged('background');
+      await settle();
+
+      engine.willTranscribe('Still works.');
+      await core.startRecording();
+      audio.speak(10);
+
+      expect((await core.stop())?.text).toBe('Still works.');
+    });
+  });
 });

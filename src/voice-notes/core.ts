@@ -31,6 +31,19 @@ export interface VoiceNotes {
   onNotesChanged(listener: () => void): () => void;
 
   /**
+   * Called once per app process, at launch. With the Speech Model installed it starts loading it, and
+   * on a `fresh` launch (a new process, opened from the home screen) starts a Recording: Instant
+   * Capture. Resolves whether it started one. Rejects when that Recording can't start.
+   */
+  launch(options: { fresh: boolean; speechModelInstalled: boolean }): Promise<boolean>;
+  /**
+   * Tells the core when the app goes to the background and comes back. Never starts a Recording. In the
+   * background the Speech Model is released (after the Recording, if one is running); coming back loads
+   * it again (ADR 0004).
+   */
+  appStateChanged(appState: 'active' | 'background'): void;
+
+  /**
    * Starts a Recording, and loads the Speech Model if it isn't loaded yet. Audio is buffered while it
    * loads. Rejects when not idle, or when the microphone can't start.
    */
@@ -61,6 +74,11 @@ export function createVoiceNotes(deps: {
   let state: CaptureState = { kind: 'idle' };
   let speechModelReady: Promise<void> | null = null;
   let recording: Recording | null = null;
+  /** Settles once the last release of the Speech Model is done; a load waits for it. */
+  let releaseDone: Promise<void> = Promise.resolve();
+  let inBackground = false;
+  /** The Speech Model was released in the background: load it again when the app comes back. */
+  let reloadWhenActive = false;
 
   function setState(next: CaptureState) {
     state = next;
@@ -69,14 +87,28 @@ export function createVoiceNotes(deps: {
 
   /** Loads and warms up the Speech Model once; a failed load is tried again next time. */
   function loadSpeechModel(): Promise<void> {
-    speechModelReady ??= engine
-      .load()
+    speechModelReady ??= releaseDone
+      .then(() => engine.load())
       .then(() => engine.warmUp())
       .catch((error: unknown) => {
         speechModelReady = null;
         throw error;
       });
     return speechModelReady;
+  }
+
+  /** Frees the Speech Model once it has finished loading; the next Recording loads it again. */
+  function releaseSpeechModel() {
+    const ready = speechModelReady;
+    if (!ready) return;
+    speechModelReady = null;
+    reloadWhenActive = true;
+    releaseDone = ready
+      .then(
+        () => engine.release(),
+        () => {} // It never loaded: nothing to free.
+      )
+      .catch((error: unknown) => console.error('[voice-notes] release failed', error));
   }
 
   const msOf = (samples: number) => Math.round((samples / SAMPLE_RATE) * 1000);
@@ -108,7 +140,7 @@ export function createVoiceNotes(deps: {
     });
   }
 
-  return {
+  const voiceNotes: VoiceNotes = {
     getState: () => state,
     subscribe(listener) {
       stateListeners.add(listener);
@@ -117,6 +149,29 @@ export function createVoiceNotes(deps: {
     onNotesChanged(listener) {
       notesListeners.add(listener);
       return () => notesListeners.delete(listener);
+    },
+
+    async launch({ fresh, speechModelInstalled }) {
+      if (!speechModelInstalled) return false;
+      if (!fresh) {
+        loadSpeechModel().catch(() => {});
+        return false;
+      }
+      await voiceNotes.startRecording();
+      return true;
+    },
+
+    appStateChanged(appState) {
+      inBackground = appState === 'background';
+      // A Recording keeps the Speech Model: Stop releases it if the app is still in the background.
+      if (inBackground) {
+        if (!recording) releaseSpeechModel();
+        return;
+      }
+      if (reloadWhenActive) {
+        reloadWhenActive = false;
+        loadSpeechModel().catch(() => {}); // A failure surfaces at the next Stop.
+      }
     },
 
     async startRecording() {
@@ -190,12 +245,14 @@ export function createVoiceNotes(deps: {
       } finally {
         recording = null;
         setState({ kind: 'idle' });
+        if (inBackground) releaseSpeechModel();
       }
     },
 
     listNotes: () => notes.list(),
     getNote: (id) => notes.get(id),
   };
+  return voiceNotes;
 }
 
 type Recording = {

@@ -9,11 +9,12 @@ import { Text } from '@/components/ui/text';
 import { firstLine, noteDate } from '@/lib/format';
 import { checkMicPermission, requestMicPermission } from '@/lib/mic-permission';
 import { useSpeechModel } from '@/lib/speech-model-store';
-import { startRecording, useNotes } from '@/lib/voice-notes-store';
+import { launchApp, startRecording, useNotes } from '@/lib/voice-notes-store';
 import type { Note } from '@/voice-notes';
 
 // Once per app process: after the user goes Back from setup, the list must stay put.
 let setupShownThisLaunch = false;
+let recordingShownThisLaunch = false;
 
 export default function NotesList() {
   const router = useRouter();
@@ -29,6 +30,19 @@ export default function NotesList() {
       router.push('/setup');
     }
   }, [model.kind, router]);
+
+  // Instant Capture: the Recording the launch started gets its screen, once.
+  useEffect(() => {
+    launchApp().then(
+      (recording) => {
+        if (recording && !recordingShownThisLaunch) {
+          recordingShownThisLaunch = true;
+          router.push('/recording');
+        }
+      },
+      () => {} // Logged where it starts, in the root layout.
+    );
+  }, [router]);
 
   async function record() {
     if ((await checkMicPermission()) !== 'granted') {

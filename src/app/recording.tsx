@@ -1,4 +1,5 @@
 import { Stack, useRouter } from 'expo-router';
+import { useKeepAwake } from 'expo-keep-awake';
 import { useEffect, useRef, type ComponentRef } from 'react';
 import { ActivityIndicator, Alert, BackHandler, ScrollView, View } from 'react-native';
 
@@ -11,6 +12,8 @@ export default function Recording() {
   const router = useRouter();
   const state = useCaptureState();
   const textView = useRef<ComponentRef<typeof ScrollView>>(null);
+  // The screen stays on while recording, so it doesn't lock mid-thought.
+  useKeepAwake();
 
   // Leaving would orphan the Recording: Back does nothing until it is Stopped.
   useEffect(() => {

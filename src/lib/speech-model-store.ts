@@ -24,7 +24,7 @@ export type SpeechModelState =
 // Glue between the model installer and the screens: one shared state, so a download keeps showing
 // its progress when the user leaves the setup screen and comes back.
 let state: SpeechModelState = { kind: 'checking' };
-let checked = false;
+let firstCheck: Promise<void> | null = null;
 // Once the user chooses to download on mobile data, a later Retry or Resume in this session doesn't ask again.
 let mobileDataAllowed = false;
 const listeners = new Set<() => void>();
@@ -45,13 +45,21 @@ async function refresh(problem?: DownloadProblem) {
   }
 }
 
+function checkOnce(): Promise<void> {
+  firstCheck ??= refresh();
+  return firstCheck;
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
-  if (!checked) {
-    checked = true;
-    void refresh();
-  }
+  void checkOnce();
   return () => listeners.delete(listener);
+}
+
+/** Whether the Speech Model is installed, once the first status check is done. */
+export async function isSpeechModelInstalled(): Promise<boolean> {
+  await checkOnce();
+  return state.kind === 'installed';
 }
 
 /** `allowMobileData`: the user saw the mobile-data warning and chose to continue. */
