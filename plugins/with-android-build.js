@@ -4,6 +4,10 @@
 //   sherpa JNI reads by name; minified release builds (Expo SDK 58 default) can crash there.
 // - After every assembleDebug/assembleRelease, scripts/check-ort-symbol.sh fails the build unless the APK
 //   pairs sherpa-onnx 2.0.3 with ONNX Runtime 1.28.2 (OrtGetApiBase@VERS_1.28.2).
+// - Release signing (docs/adr/0005): when VOI_NOTE_KEYSTORE is set (the release workflow), release builds are
+//   signed with the release key; otherwise they keep Expo's debug key, as local release builds always have.
+// - -PvoiNoteVersionName / -PvoiNoteVersionCode override app.json's version (the release workflow sets them
+//   from the tag via scripts/release-version.js).
 const { withAppBuildGradle, withGradleProperties } = require('expo/config-plugins');
 
 const MARKER = '// voi-note: ORT symbol check (ADR 0002)';
@@ -26,6 +30,29 @@ afterEvaluate {
 }
 `;
 
+const SIGNING_MARKER = '// voi-note: release signing and version (ADR 0005)';
+const SIGNING_BLOCK = `
+${SIGNING_MARKER}
+android {
+    def releaseKeystore = System.getenv('VOI_NOTE_KEYSTORE')
+    if (releaseKeystore) {
+        signingConfigs {
+            release {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv('VOI_NOTE_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('VOI_NOTE_KEY_ALIAS')
+                keyPassword System.getenv('VOI_NOTE_KEY_PASSWORD')
+            }
+        }
+        buildTypes.release.signingConfig signingConfigs.release
+    }
+    def versionNameOverride = findProperty('voiNoteVersionName')
+    def versionCodeOverride = findProperty('voiNoteVersionCode')
+    if (versionNameOverride) defaultConfig.versionName versionNameOverride
+    if (versionCodeOverride) defaultConfig.versionCode versionCodeOverride.toInteger()
+}
+`;
+
 const withProperties = (config) =>
   withGradleProperties(config, (c) => {
     const set = (key, value) => {
@@ -38,10 +65,11 @@ const withProperties = (config) =>
     return c;
   });
 
-const withOrtCheck = (config) =>
+const withOrtCheckAndSigning = (config) =>
   withAppBuildGradle(config, (c) => {
     if (!c.modResults.contents.includes(MARKER)) c.modResults.contents += CHECK_TASK;
+    if (!c.modResults.contents.includes(SIGNING_MARKER)) c.modResults.contents += SIGNING_BLOCK;
     return c;
   });
 
-module.exports = (config) => withOrtCheck(withProperties(config));
+module.exports = (config) => withOrtCheckAndSigning(withProperties(config));
