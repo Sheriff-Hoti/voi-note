@@ -196,7 +196,7 @@ export function createVoiceNotes(deps: {
     current.chunker.end();
     await current.decodeQueue;
     if (current.failure) {
-      // No Note points at the audio, so don't leave it behind. (Ticket #9 keeps it as a Pending Note.)
+      // No Note points at the audio, so don't leave it behind. (Ticket #2 keeps it as a Pending Note.)
       await files.remove(audioPath).catch(() => {});
       throw current.failure.error;
     }

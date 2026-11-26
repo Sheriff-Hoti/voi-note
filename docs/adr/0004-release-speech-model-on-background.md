@@ -1,6 +1,6 @@
 # Release the Speech Model as soon as the app goes to the background
 
-Spec #1 asked for the Speech Model (about 1.2 GB on the Galaxy A54) to be released after 5 minutes in the background. On the A54 no timer we can use runs that long in the background (ticket #7):
+Spec #1 asked for the Speech Model (about 1.2 GB on the Galaxy A54) to be released after 5 minutes in the background. On the A54 no timer we can use runs that long in the background (ticket Sheriff-Hoti/voi-note-archive#7):
 
 - React Native's own `setTimeout` doesn't fire in the background on Android. A 20 s timer set as the app went to the background never fired in 45 s.
 - A native Android `Handler` timer (`react-native-background-timer-android`, which holds a partial wake lock) fired on time over 30 s. Over 5 minutes, Samsung's process freezer stopped it. After 330 s untouched it had not fired, and 1.14 of the app's 1.23 GB had been swapped to storage. The overdue timer then fired the moment the app came back, releasing the Speech Model just as it was needed again.
