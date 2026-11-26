@@ -7,7 +7,7 @@ name: Release APK
 
 on:
   push:
-    branches: [main, ticket/8-release-apk] # TEMPORARY: lets the branch run before the file is on main; reverted before review
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
