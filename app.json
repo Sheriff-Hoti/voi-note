@@ -17,7 +17,9 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.voinote.app",
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": ["android.permission.RECORD_AUDIO"],
+      "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
+      "allowBackup": false
     },
     "plugins": [
       "expo-router",
